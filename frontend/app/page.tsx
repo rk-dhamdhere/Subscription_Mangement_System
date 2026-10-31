@@ -118,8 +118,8 @@ function Header() {
           ))}
         </nav>
         <div className="hidden items-center gap-5 md:flex">
-          <a href="#memory" className="text-[12px] text-neutral-400 transition-colors hover:text-white">Log in</a>
-          <a href="#simulate" className="inline-flex h-9 items-center gap-2 rounded-full bg-emerald-400 px-4 text-[12px] font-semibold text-[#07120d] transition hover:bg-emerald-300">
+          <a href="/login" className="text-[12px] text-neutral-400 transition-colors hover:text-white">Log in</a>
+          <a href="/login" className="inline-flex h-9 items-center gap-2 rounded-full bg-emerald-400 px-4 text-[12px] font-semibold text-[#07120d] transition hover:bg-emerald-300">
             Get started <ArrowRight className="size-3.5" />
           </a>
         </div>
@@ -142,8 +142,8 @@ function Header() {
               </a>
             ))}
             <div className="flex items-center gap-5 border-t border-white/10 pt-4">
-              <a href="#memory" onClick={() => setMenuOpen(false)} className="text-sm text-neutral-400">Log in</a>
-              <a href="#simulate" onClick={() => setMenuOpen(false)} className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-2 text-sm font-medium text-[#07120d]">
+              <a href="/login" onClick={() => setMenuOpen(false)} className="text-sm text-neutral-400">Log in</a>
+              <a href="/login" onClick={() => setMenuOpen(false)} className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-2 text-sm font-medium text-[#07120d]">
                 Get started <ArrowRight className="size-4" />
               </a>
             </div>
@@ -441,7 +441,7 @@ function SimulatorHero({
             <p className="mb-4 text-[10px] font-medium uppercase tracking-[0.24em] text-emerald-300/80">DECISION SIMULATOR</p>
             <TypewriterHeading />
             <div className="mt-7 flex flex-wrap justify-center gap-3 sm:justify-start">
-              <a href="#memory" className="inline-flex h-11 items-center gap-2 rounded-full bg-emerald-400 px-5 text-xs font-semibold text-[#07120d] transition hover:bg-emerald-300">
+              <a href="/login" className="inline-flex h-11 items-center gap-2 rounded-full bg-emerald-400 px-5 text-xs font-semibold text-[#07120d] transition hover:bg-emerald-300">
                 Build your Business Twin <ArrowRight className="size-3.5" />
               </a>
               <a href="#compare" className="inline-flex h-11 items-center gap-2 rounded-full border border-white/[0.12] bg-white/[0.025] px-5 text-xs font-medium text-neutral-200 transition hover:border-white/25 hover:bg-white/[0.05]">
