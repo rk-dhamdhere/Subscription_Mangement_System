@@ -1,4 +1,10 @@
-import { IsEmail, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  Matches,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class RegisterDto {
   @IsEmail()
@@ -9,7 +15,8 @@ export class RegisterDto {
   @MinLength(8)
   @MaxLength(128)
   @Matches(/(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9])/, {
-    message: 'password must include uppercase, lowercase, and special characters',
+    message:
+      'password must include uppercase, lowercase, and special characters',
   })
   password!: string;
 

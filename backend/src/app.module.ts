@@ -10,6 +10,9 @@ import { RolesGuard } from './auth/guards/roles.guard';
 import { CatalogModule } from './catalog/catalog.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { BillingModule } from './billing/billing.module';
+import { PaymentsModule } from './payments/payments.module';
+import { FinanceModule } from './finance/finance.module';
+import { QuotationsModule } from './quotations/quotations.module';
 
 @Module({
   imports: [
@@ -19,6 +22,9 @@ import { BillingModule } from './billing/billing.module';
     CatalogModule,
     SubscriptionsModule,
     BillingModule,
+    PaymentsModule,
+    FinanceModule,
+    QuotationsModule,
   ],
   controllers: [AppController],
   providers: [

@@ -1,7 +1,7 @@
 # Brightloop Backend Progress
 
 **Last updated:** 31 October 2026  
-**Status:** Billing run and draft invoice engine implemented
+**Status:** Backend-only business workflows implemented; frontend connection remains deferred
 
 ## 1. Backend goal
 
@@ -46,19 +46,15 @@ The backend uses **NestJS**, **PostgreSQL in Docker**, and **Prisma**. PostgreSQ
   { "status": "ok", "service": "brightloop-backend" }
   ```
 
-## 3. Not yet started
-
-No Brightloop business tables, Prisma models, migrations, authentication, or business APIs have been created yet.
-
-## 4. Remaining work
+## 3. Remaining work
 
 ### Phase A — Database and Prisma
 
 - [x] Install and configure Prisma.
 - [x] Add backend environment configuration and database connection string.
 - [x] Define the core database models, enums, relationships, unique protections, and indexes.
-- [x] Run the first Prisma migration; 18 Brightloop tables now exist in PostgreSQL.
-- [ ] Add deterministic seed/demo data.
+- [x] Run Prisma migrations; 19 Brightloop tables now exist in PostgreSQL.
+- [x] Add deterministic seed/demo data.
 
 Main planned entities:
 
@@ -83,37 +79,41 @@ Password reset tokens
 - [x] JWT bearer-token validation and public-route protection.
 - [x] Reusable Admin/Sales/Finance/Customer role guard.
 - [x] Registration and login verified live against PostgreSQL.
-- [ ] Password-reset workflow.
-- [ ] Customer ownership checks.
+- [x] Expiring, single-use password-reset workflow with hashed tokens and SMTP delivery.
+- [x] Customer ownership checks for subscription and invoice reads.
 
 ### Phase C — Core business modules
 
-- [ ] Catalog and plan management. **In progress**
-- [ ] Tax and discount-rule management.
-- [ ] Quotation templates.
-- [ ] Subscription creation and lifecycle guard:
+- [x] Catalog and plan management.
+- [x] Tax and discount-rule management.
+- [x] Quotation templates and subscription quotation creation.
+- [x] Subscription creation and lifecycle guard:
 
   ```text
   DRAFT → QUOTATION → CONFIRMED → ACTIVE → CLOSED
   ```
 
 - [x] Finance/Admin billing run with duplicate-invoice protection and atomic billing-date advancement.
-- [ ] Invoice lifecycle management.
-- [ ] Payment recording and partial-payment allocation.
-- [ ] Finance dashboard and overdue-aging endpoints.
-- [ ] Audit logs for sensitive actions.
+- [x] Invoice listing and Admin/Finance draft confirmation/cancellation with transactional audit records.
+- [x] Payment recording and partial/full invoice allocation.
+- [x] Finance dashboard and receivables aging endpoints.
+- [x] Audit logs for invoice, subscription, payment, and password-reset actions.
 
 ### Phase D — Quality and frontend handoff
 
-- [ ] Unit and integration tests for critical financial workflows.
-- [ ] Swagger/OpenAPI documentation at `/docs`.
+- [x] Focused unit tests for authentication, subscriptions, billing, invoices, payments, and finance reports.
+- [x] Swagger/OpenAPI documentation at `/docs`.
 - [ ] CORS configuration for the frontend team.
 - [ ] API request/response examples and frontend integration notes.
-- [ ] Demo seed data and hackathon demo script.
+- [x] Deterministic demo seed data.
 
-## 5. Current implementation checkpoint
+## 4. Current implementation checkpoint
 
-The billing engine is implemented. Tax and discount-rule management and invoice lifecycle management remain next.
+Core backend business and financial APIs are implemented. Frontend API wiring, CORS allowlist configuration, and end-to-end testing against connected frontend flows remain.
+
+Catalog APIs are Admin-only and cover products, product variants, plans, tax rules, and discount rules. Subscription prices snapshot the effective tax rules and any redeemed discount; recurring invoices use those snapshots and include tax/discount line items.
+
+The demo seed creates Admin, Finance, and Customer accounts plus a product, variant, plan, quotation template, and active subscription. It is deterministic and requires `BRIGHTLOOP_DEMO_PASSWORD`; it is not run automatically.
 
 Billing API:
 
@@ -123,3 +123,35 @@ POST /api/v1/billing-runs  { "billingDate": "YYYY-MM-DD" }
 ```
 
 Runs are restricted to Admin and Finance staff. Each run creates at most one draft invoice for each active subscription due on or before its billing date, snapshots its plan and item amounts, advances the next billing date in the same database transaction, and is idempotent for a repeated billing date. Month/year advances clamp dates to the last calendar day where needed. Invoice due dates follow `NET_<days>` or `DUE_ON_RECEIPT` payment terms.
+
+Invoice API:
+
+```text
+GET   /api/v1/invoices
+GET   /api/v1/invoices/:id
+PATCH /api/v1/invoices/:id/status  { "status": "CONFIRMED" | "CANCELLED" }
+```
+
+Only draft invoices can be confirmed or cancelled. Paid status is reserved for payment allocation, and status changes are conditional and audited in a transaction.
+
+Quotation templates are managed at `/api/v1/quotation-templates` (Admin only). `POST /api/v1/subscriptions/from-template` creates a quotation with the template's plan, items, and validity period.
+
+Payments and finance API:
+
+```text
+GET  /api/v1/payments
+POST /api/v1/payments
+GET  /api/v1/finance/dashboard
+GET  /api/v1/finance/receivables/aging
+```
+
+Password reset:
+
+```text
+POST /api/v1/auth/password-reset/request
+POST /api/v1/auth/password-reset/complete
+```
+
+Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`, and `FRONTEND_URL` before using password-reset email delivery. Demo accounts/data are created with `npm run db:seed` only after setting `BRIGHTLOOP_DEMO_PASSWORD` to a password of at least 12 characters.
+
+The reset email points to `${FRONTEND_URL}/reset-password`; the frontend reset page and API integration are not implemented yet. CORS is intentionally not enabled until the frontend origin is known.

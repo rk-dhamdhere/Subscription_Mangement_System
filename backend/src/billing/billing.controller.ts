@@ -3,8 +3,11 @@ import { Request } from 'express';
 import { FinanceAdminGuard } from './finance-admin.guard';
 import { RunBillingDto } from './dto/run-billing.dto';
 import { BillingService } from './billing.service';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 @Controller('billing-runs')
+@ApiTags('Billing')
+@ApiBearerAuth()
 @UseGuards(FinanceAdminGuard)
 export class BillingController {
   constructor(private readonly billing: BillingService) {}

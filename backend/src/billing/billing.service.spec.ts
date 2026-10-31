@@ -23,8 +23,15 @@ describe('BillingService', () => {
       paymentTerms: 'NET_30',
       status: SubscriptionStatus.ACTIVE,
       nextBillingDate: date('2026-01-31'),
+      expiryDate: date('2027-01-31'),
       subtotalAmount: new Prisma.Decimal(120),
-      plan: { billingPeriod: BillingPeriod.MONTHLY },
+      taxAmount: new Prisma.Decimal(1),
+      discountAmount: new Prisma.Decimal(10),
+      plan: {
+        billingPeriod: BillingPeriod.MONTHLY,
+        endDate: null,
+        autoClose: false,
+      },
       items: [
         {
           id: 'item-1',
@@ -79,7 +86,15 @@ describe('BillingService', () => {
     expect(invoice.dueDate).toEqual(date('2026-03-03'));
     expect(invoice.subtotalAmount).toEqual(new Prisma.Decimal(120));
     expect(invoice.taxAmount).toEqual(new Prisma.Decimal(1));
-    expect(invoice.totalAmount).toEqual(new Prisma.Decimal(121));
+    expect(invoice.discountAmount).toEqual(new Prisma.Decimal(10));
+    expect(invoice.totalAmount).toEqual(new Prisma.Decimal(111));
+    expect(invoice.items?.create).toContainEqual(
+      expect.objectContaining({
+        itemType: 'DISCOUNT',
+        preTaxAmount: new Prisma.Decimal(-10),
+        totalAmount: new Prisma.Decimal(-10),
+      }),
+    );
     expect(tx.billingRunItem.create).toHaveBeenCalledWith({
       data: {
         billingRunId: 'run-1',

@@ -1,5 +1,15 @@
 import { DiscountType } from '../../generated/prisma/client';
-import { IsBoolean, IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsDateString,
+  IsEnum,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class CreateDiscountRuleDto {
   @IsString() @MaxLength(50) code!: string;

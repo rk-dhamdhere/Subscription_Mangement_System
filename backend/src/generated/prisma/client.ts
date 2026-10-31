@@ -22,7 +22,7 @@ export * as $Enums from './enums'
 export * from "./enums"
 /**
  * ## Prisma Client
- * 
+ *
  * Type-safe database client for TypeScript
  * @example
  * ```
@@ -32,7 +32,7 @@ export * from "./enums"
  * // Fetch zero or more Users
  * const users = await prisma.user.findMany()
  * ```
- * 
+ *
  * Read more in our [docs](https://pris.ly/d/client).
  */
 export const PrismaClient = $Class.getPrismaClientClass()
@@ -41,91 +41,96 @@ export { Prisma }
 
 /**
  * Model User
- * 
+ *
  */
 export type User = Prisma.UserModel
 /**
+ * Model PasswordResetToken
+ *
+ */
+export type PasswordResetToken = Prisma.PasswordResetTokenModel
+/**
  * Model CustomerProfile
- * 
+ *
  */
 export type CustomerProfile = Prisma.CustomerProfileModel
 /**
  * Model Product
- * 
+ *
  */
 export type Product = Prisma.ProductModel
 /**
  * Model ProductVariant
- * 
+ *
  */
 export type ProductVariant = Prisma.ProductVariantModel
 /**
  * Model Plan
- * 
+ *
  */
 export type Plan = Prisma.PlanModel
 /**
  * Model QuotationTemplate
- * 
+ *
  */
 export type QuotationTemplate = Prisma.QuotationTemplateModel
 /**
  * Model QuotationTemplateItem
- * 
+ *
  */
 export type QuotationTemplateItem = Prisma.QuotationTemplateItemModel
 /**
  * Model Subscription
- * 
+ *
  */
 export type Subscription = Prisma.SubscriptionModel
 /**
  * Model SubscriptionItem
- * 
+ *
  */
 export type SubscriptionItem = Prisma.SubscriptionItemModel
 /**
  * Model TaxRule
- * 
+ *
  */
 export type TaxRule = Prisma.TaxRuleModel
 /**
  * Model DiscountRule
- * 
+ *
  */
 export type DiscountRule = Prisma.DiscountRuleModel
 /**
  * Model BillingRun
- * 
+ *
  */
 export type BillingRun = Prisma.BillingRunModel
 /**
  * Model BillingRunItem
- * 
+ *
  */
 export type BillingRunItem = Prisma.BillingRunItemModel
 /**
  * Model Invoice
- * 
+ *
  */
 export type Invoice = Prisma.InvoiceModel
 /**
  * Model InvoiceItem
- * 
+ *
  */
 export type InvoiceItem = Prisma.InvoiceItemModel
 /**
  * Model Payment
- * 
+ *
  */
 export type Payment = Prisma.PaymentModel
 /**
  * Model PaymentAllocation
- * 
+ *
  */
 export type PaymentAllocation = Prisma.PaymentAllocationModel
 /**
  * Model AuditLog
- * 
+ *
  */
 export type AuditLog = Prisma.AuditLogModel

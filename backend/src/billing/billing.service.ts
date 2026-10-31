@@ -57,6 +57,35 @@ export class BillingService {
 
         for (const subscription of candidates) {
           const cycleDate = dateOnly(subscription.nextBillingDate);
+          const subscriptionExpired =
+            cycleDate > dateOnly(subscription.expiryDate);
+          const planExpired =
+            subscription.plan.endDate !== null &&
+            subscription.plan.endDate !== undefined &&
+            cycleDate > dateOnly(subscription.plan.endDate);
+          if (subscriptionExpired || planExpired) {
+            if (subscription.plan.autoClose) {
+              await tx.subscription.updateMany({
+                where: {
+                  id: subscription.id,
+                  status: SubscriptionStatus.ACTIVE,
+                  nextBillingDate: cycleDate,
+                },
+                data: { status: SubscriptionStatus.CLOSED },
+              });
+            }
+            await tx.billingRunItem.create({
+              data: {
+                billingRunId: run.id,
+                subscriptionId: subscription.id,
+                outcome: BillingOutcome.SKIPPED,
+                message:
+                  'Subscription or plan has expired before the billing cycle.',
+              },
+            });
+            skippedCount += 1;
+            continue;
+          }
           const nextBillingDate = advanceBillingDate(
             cycleDate,
             subscription.plan.billingPeriod,
@@ -139,6 +168,8 @@ function buildInvoice(
     customerId: string;
     paymentTerms: string;
     subtotalAmount: Prisma.Decimal;
+    taxAmount: Prisma.Decimal;
+    discountAmount: Prisma.Decimal;
     items: Array<{
       id: string;
       productName: string;
@@ -158,6 +189,12 @@ function buildInvoice(
     new Prisma.Decimal(0),
   );
   const planFee = subscription.subtotalAmount.minus(itemsSubtotal);
+  const productTax = subscription.items.reduce(
+    (total, item) =>
+      total.plus(item.subtotal.mul(item.taxRate).div(100).toDecimalPlaces(2)),
+    new Prisma.Decimal(0),
+  );
+  const planTax = subscription.taxAmount.minus(productTax);
   const invoiceItems: Prisma.InvoiceItemCreateWithoutInvoiceInput[] = [
     {
       itemType: InvoiceItemType.PLAN_FEE,
@@ -165,9 +202,11 @@ function buildInvoice(
       quantity: 1,
       unitPrice: planFee,
       preTaxAmount: planFee,
-      taxRate: 0,
-      taxAmount: 0,
-      totalAmount: planFee,
+      taxRate: planFee.equals(0)
+        ? 0
+        : planTax.mul(100).div(planFee).toDecimalPlaces(4),
+      taxAmount: planTax,
+      totalAmount: planFee.plus(planTax),
     },
     ...subscription.items.map((item) => {
       const taxAmount = item.subtotal
@@ -190,12 +229,22 @@ function buildInvoice(
     }),
   ];
   const subtotalAmount = subscription.subtotalAmount;
-  const taxAmount = subscription.items.reduce(
-    (total, item) =>
-      total.plus(item.subtotal.mul(item.taxRate).div(100).toDecimalPlaces(2)),
-    new Prisma.Decimal(0),
-  );
-  const totalAmount = subtotalAmount.plus(taxAmount);
+  const taxAmount = subscription.taxAmount;
+  const discountAmount = subscription.discountAmount;
+  if (discountAmount.greaterThan(0)) {
+    const discount = discountAmount.negated();
+    invoiceItems.push({
+      itemType: InvoiceItemType.DISCOUNT,
+      description: 'Subscription discount',
+      quantity: 1,
+      unitPrice: discount,
+      preTaxAmount: discount,
+      taxRate: 0,
+      taxAmount: 0,
+      totalAmount: discount,
+    });
+  }
+  const totalAmount = subtotalAmount.plus(taxAmount).minus(discountAmount);
 
   return {
     invoiceNumber: `INV-${issueDate.toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID().slice(0, 8).toUpperCase()}`,
@@ -207,7 +256,7 @@ function buildInvoice(
     dueDate: paymentTermsDueDate(issueDate, subscription.paymentTerms),
     subtotalAmount,
     taxAmount,
-    discountAmount: 0,
+    discountAmount,
     totalAmount,
     paidAmount: 0,
     amountDue: totalAmount,
