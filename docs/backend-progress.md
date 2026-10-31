@@ -1,7 +1,7 @@
 # Brightloop Backend Progress
 
 **Last updated:** 31 October 2026  
-**Status:** Database foundation complete — security and business modules pending
+**Status:** Billing run and draft invoice engine implemented
 
 ## 1. Backend goal
 
@@ -78,15 +78,17 @@ Password reset tokens
 
 ### Phase B — Security
 
-- [ ] Password hashing and password policy.
-- [ ] Login and JWT authentication.
+- [x] Password hashing with Argon2id and password-complexity policy.
+- [x] Customer registration, login, and JWT authentication.
+- [x] JWT bearer-token validation and public-route protection.
+- [x] Reusable Admin/Sales/Finance/Customer role guard.
+- [x] Registration and login verified live against PostgreSQL.
 - [ ] Password-reset workflow.
-- [ ] Server-side role-based access control for Admin, Sales, Finance, and Customer.
 - [ ] Customer ownership checks.
 
 ### Phase C — Core business modules
 
-- [ ] Catalog and plan management.
+- [ ] Catalog and plan management. **In progress**
 - [ ] Tax and discount-rule management.
 - [ ] Quotation templates.
 - [ ] Subscription creation and lifecycle guard:
@@ -95,7 +97,7 @@ Password reset tokens
   DRAFT → QUOTATION → CONFIRMED → ACTIVE → CLOSED
   ```
 
-- [ ] Automated billing run with duplicate-invoice protection.
+- [x] Finance/Admin billing run with duplicate-invoice protection and atomic billing-date advancement.
 - [ ] Invoice lifecycle management.
 - [ ] Payment recording and partial-payment allocation.
 - [ ] Finance dashboard and overdue-aging endpoints.
@@ -109,8 +111,15 @@ Password reset tokens
 - [ ] API request/response examples and frontend integration notes.
 - [ ] Demo seed data and hackathon demo script.
 
-## 5. Next approval checkpoint
+## 5. Current implementation checkpoint
 
-The next action is the **security phase**: implement authentication, password hashing, JWT tokens, and role-based access control.
+The billing engine is implemented. Tax and discount-rule management and invoice lifecycle management remain next.
 
-This adds user-facing security behavior and API contracts, so approval is required before starting this phase.
+Billing API:
+
+```text
+GET  /api/v1/billing-runs
+POST /api/v1/billing-runs  { "billingDate": "YYYY-MM-DD" }
+```
+
+Runs are restricted to Admin and Finance staff. Each run creates at most one draft invoice for each active subscription due on or before its billing date, snapshots its plan and item amounts, advances the next billing date in the same database transaction, and is idempotent for a repeated billing date. Month/year advances clamp dates to the last calendar day where needed. Invoice due dates follow `NET_<days>` or `DUE_ON_RECEIPT` payment terms.
