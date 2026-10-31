@@ -10,22 +10,36 @@ import {
   WorkspaceShell,
 } from '@/components/workspace/WorkspaceShell'
 import { StateMachineBar } from '@/components/subscriptions/StateMachineBar'
+import { QuotationComposer } from '@/components/subscriptions/QuotationComposer'
 import { apiClient } from '@/services/apiClient'
 import { formatCurrency, formatDate } from '@/lib/format'
-import type { Subscription, SubscriptionStatus } from '@/types/api'
+import type {
+  CustomerSummary,
+  QuotationTemplate,
+  Subscription,
+  SubscriptionStatus,
+} from '@/types/api'
 
 export default function SalesWorkspacePage() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
+  const [customers, setCustomers] = useState<CustomerSummary[]>([])
+  const [templates, setTemplates] = useState<QuotationTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [transitioning, setTransitioning] = useState<string | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
     let active = true
-    apiClient
-      .get<Subscription[]>('/subscriptions')
-      .then((data) => {
-        if (active) setSubscriptions(data)
+    Promise.all([
+      apiClient.get<Subscription[]>('/subscriptions'),
+      apiClient.get<CustomerSummary[]>('/customers'),
+      apiClient.get<QuotationTemplate[]>('/quotation-templates'),
+    ])
+      .then(([subscriptionList, customerList, templateList]) => {
+        if (!active) return
+        setSubscriptions(subscriptionList)
+        setCustomers(customerList)
+        setTemplates(templateList)
       })
       .catch((requestError: unknown) => {
         if (active) setError(requestError instanceof Error ? requestError.message : 'Unable to load subscriptions.')
@@ -39,7 +53,7 @@ export default function SalesWorkspacePage() {
   }, [])
 
   async function transition(id: string, status: SubscriptionStatus) {
-    if (status === 'CLOSED' && !window.confirm('Close this active subscription?')) return
+    if (status === 'CLOSED' && !window.confirm('Close this subscription? This cannot be undone.')) return
     setTransitioning(id)
     setError('')
     try {
@@ -58,7 +72,7 @@ export default function SalesWorkspacePage() {
     <AccessGate roles={['STAFF', 'ADMIN']} subRoles={['SALES', 'GENERAL']}>
       <WorkspaceShell
         title="Sales workspace"
-        description="Track customer subscriptions and move each one through its valid lifecycle."
+        description="Start from a quotation template, prepare a customer offer, and track every subscription through its lifecycle."
       >
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-300/15 bg-emerald-300/[0.04] px-5 py-4">
           <div>
@@ -69,7 +83,15 @@ export default function SalesWorkspacePage() {
         </div>
         {error && <div className="mb-5"><ErrorMessage message={error} /></div>}
         {loading ? <LoadingMessage label="Loading subscriptions…" /> : !error && (
-          subscriptions.length ? (
+          <>
+          <div className="mb-5">
+            <QuotationComposer
+              customers={customers}
+              templates={templates}
+              onCreated={(quotation) => setSubscriptions((current) => [quotation, ...current])}
+            />
+          </div>
+          {subscriptions.length ? (
             <div className="space-y-4">
               {subscriptions.map((subscription) => (
                 <Surface key={subscription.id} title={subscription.subscriptionNumber}>
@@ -83,12 +105,15 @@ export default function SalesWorkspacePage() {
                     currentStatus={subscription.status}
                     isLoading={transitioning === subscription.id}
                     isStaffOrAdmin
+                    canPause={subscription.plan.canPause}
+                    canCloseEarly={subscription.plan.canCloseEarly}
                     onTransition={(status) => transition(subscription.id, status)}
                   />
                 </Surface>
               ))}
             </div>
-          ) : <Surface title="Subscriptions"><p className="text-sm text-neutral-500">No subscriptions found.</p></Surface>
+          ) : <Surface title="Subscriptions"><p className="text-sm text-neutral-500">No subscriptions found.</p></Surface>}
+          </>
         )}
       </WorkspaceShell>
     </AccessGate>

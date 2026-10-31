@@ -1,22 +1,26 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+
+jest.mock('@nestjs/common', () => ({
+  Controller: () => (target: unknown) => target,
+  Get: () => () => undefined,
+  Injectable: () => (target: unknown) => target,
+  SetMetadata: () => () => undefined,
+}));
+
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 
 describe('AppController', () => {
   let appController: AppController;
 
-  beforeEach(async () => {
-    const app: TestingModule = await Test.createTestingModule({
-      controllers: [AppController],
-      providers: [AppService],
-    }).compile();
-
-    appController = app.get<AppController>(AppController);
+  beforeEach(() => {
+    appController = new AppController(new AppService());
   });
 
-  describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+  it('returns the Brightloop backend health status', () => {
+    expect(appController.health()).toEqual({
+      status: 'ok',
+      service: 'brightloop-backend',
     });
   });
 });

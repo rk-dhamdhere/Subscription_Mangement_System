@@ -116,4 +116,65 @@ describe('BillingService', () => {
     ).resolves.toBe(existingRun);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
+
+  it('previews invoice eligibility and totals without writing records', async () => {
+    const subscription = {
+      id: 'subscription-1',
+      subscriptionNumber: 'SUB-1',
+      customerId: 'customer-1',
+      paymentTerms: 'NET_30',
+      status: SubscriptionStatus.ACTIVE,
+      nextBillingDate: date('2026-01-31'),
+      expiryDate: date('2027-01-31'),
+      subtotalAmount: new Prisma.Decimal(120),
+      taxAmount: new Prisma.Decimal(1),
+      discountAmount: new Prisma.Decimal(10),
+      plan: {
+        billingPeriod: BillingPeriod.MONTHLY,
+        endDate: null,
+        autoClose: false,
+      },
+      items: [],
+    };
+    const expiredSubscription = {
+      ...subscription,
+      id: 'subscription-expired',
+      subscriptionNumber: 'SUB-EXPIRED',
+      expiryDate: date('2026-01-30'),
+    };
+    const prisma = {
+      billingRun: { findUnique: resolved(null) },
+      subscription: { findMany: resolved([subscription, expiredSubscription]) },
+      $transaction: jest.fn(),
+    } as unknown as PrismaService;
+
+    await expect(
+      new BillingService(prisma).preview(date('2026-02-01')),
+    ).resolves.toMatchObject({
+      billingDate: date('2026-02-01'),
+      alreadyExecuted: false,
+      candidateCount: 2,
+      invoicedCount: 1,
+      skippedCount: 1,
+      projectedTotal: new Prisma.Decimal(111),
+      items: [
+        {
+          subscriptionId: 'subscription-1',
+          subscriptionNumber: 'SUB-1',
+          billingCycleDate: date('2026-01-31'),
+          outcome: 'INVOICED',
+          estimatedTotal: '111',
+          message: null,
+        },
+        {
+          subscriptionId: 'subscription-expired',
+          subscriptionNumber: 'SUB-EXPIRED',
+          outcome: 'SKIPPED',
+          estimatedTotal: null,
+          message: 'Subscription or plan has expired before the billing cycle.',
+        },
+      ],
+    });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
 });

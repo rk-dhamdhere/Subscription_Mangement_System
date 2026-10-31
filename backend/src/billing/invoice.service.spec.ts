@@ -6,6 +6,10 @@ jest.mock('@nestjs/common', () => ({
   Injectable: () => (target: unknown) => target,
   BadRequestException: MockHttpException,
   NotFoundException: MockHttpException,
+  ServiceUnavailableException: MockHttpException,
+}));
+jest.mock('./invoice-mailer.service', () => ({
+  InvoiceMailer: class {},
 }));
 
 import { InvoiceStatus, Prisma } from '../generated/prisma/client';

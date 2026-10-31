@@ -104,7 +104,7 @@ export function hydrateAuthStore() {
   } catch (error) {
     window.localStorage.removeItem(STORAGE_KEY)
     updateState({ user: null, token: null, hydrated: true })
-    console.error('Unable to restore the saved Brightloop session.', error)
+    console.error('Unable to restore the saved Twin session.', error)
   }
 }
 

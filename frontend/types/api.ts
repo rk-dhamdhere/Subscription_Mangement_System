@@ -4,13 +4,9 @@ export type BackendStaffRole = 'SALES' | 'FINANCE' | 'NONE'
 
 export type BillingFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'
 export type SubscriptionStatus =
-  | 'DRAFT'
-  | 'QUOTATION'
-  | 'CONFIRMED'
-  | 'ACTIVE'
-  | 'CLOSED'
+  'DRAFT' | 'QUOTATION' | 'CONFIRMED' | 'ACTIVE' | 'PAUSED' | 'CLOSED'
 export type InvoiceStatus = 'DRAFT' | 'CONFIRMED' | 'PAID' | 'CANCELLED'
-export type PaymentMethod = 'CREDIT_CARD' | 'BANK_TRANSFER' | 'CASH' | 'CHECK'
+export type PaymentMethod = 'CREDIT_CARD' | 'BANK_TRANSFER' | 'CASH' | 'CHECK' | 'RAZORPAY'
 
 export interface User {
   id: string
@@ -53,6 +49,7 @@ export interface Plan {
   endDate: string | null
   autoClose: boolean
   canPause: boolean
+  canCloseEarly: boolean
   canRenew: boolean
   isActive: boolean
 }
@@ -144,6 +141,19 @@ export interface Invoice {
   totalAmount: string
   paidAmount: string
   amountDue: string
+  items: InvoiceLineItem[]
+}
+
+export interface InvoiceLineItem {
+  id: string
+  itemType: 'PRODUCT' | 'PLAN_FEE' | 'DISCOUNT' | 'ADJUSTMENT'
+  description: string
+  quantity: number
+  unitPrice: string
+  preTaxAmount: string
+  taxRate: string
+  taxAmount: string
+  totalAmount: string
 }
 
 export interface FinanceDashboard {
@@ -154,6 +164,15 @@ export interface FinanceDashboard {
   overdueInvoices: number
   overdueAmount: string
   paymentsReceivedThisMonth: string
+}
+
+export interface ReceivablesAging {
+  asOf: string
+  buckets: Array<{
+    bucket: string
+    invoiceCount: number
+    amount: string
+  }>
 }
 
 export interface BillingRunItem {
@@ -181,11 +200,63 @@ export interface Payment {
   receivedAt: string
   amount: string
   status: 'POSTED' | 'VOIDED'
+  notes: string | null
+}
+
+export interface RazorpayOrder {
+  keyId: string
+  orderId: string
+  amount: number
+  currency: 'INR'
+  invoiceNumber: string
 }
 
 export interface BillingPreview {
-  dueCount: number
-  invoicesToCreate: number
+  billingDate: string
+  alreadyExecuted: boolean
+  candidateCount: number
+  invoicedCount: number
   skippedCount: number
-  projectedTotal: number
+  projectedTotal: string
+  items: BillingPreviewItem[]
+}
+
+export interface BillingPreviewItem {
+  subscriptionId: string
+  subscriptionNumber: string
+  billingCycleDate: string
+  outcome: 'INVOICED' | 'SKIPPED' | 'FAILED'
+  estimatedTotal: string | null
+  message: string | null
+}
+
+export interface StaffMember {
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  staffRole: BackendStaffRole
+  isActive: boolean
+  createdAt: string
+}
+
+export interface CustomerSummary {
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  profile: { legalName: string | null } | null
+}
+
+export interface QuotationTemplate {
+  id: string
+  name: string
+  validityDays: number
+  plan: Plan
+  items: Array<{
+    id: string
+    quantity: number
+    product: Product
+    variant: ProductVariant | null
+  }>
 }

@@ -13,6 +13,8 @@ import { BillingModule } from './billing/billing.module';
 import { PaymentsModule } from './payments/payments.module';
 import { FinanceModule } from './finance/finance.module';
 import { QuotationsModule } from './quotations/quotations.module';
+import { StaffModule } from './staff/staff.module';
+import { CustomersModule } from './customers/customers.module';
 
 @Module({
   imports: [
@@ -25,6 +27,8 @@ import { QuotationsModule } from './quotations/quotations.module';
     PaymentsModule,
     FinanceModule,
     QuotationsModule,
+    StaffModule,
+    CustomersModule,
   ],
   controllers: [AppController],
   providers: [

@@ -160,6 +160,111 @@ export class BillingService {
       throw error;
     }
   }
+
+  async preview(billingDate: Date) {
+    const runDate = dateOnly(billingDate);
+    const existing = await this.prisma.billingRun.findUnique({
+      where: { billingDate: runDate },
+      include: invoiceRunInclude,
+    });
+    if (existing) {
+      const invoiceBySubscription = new Map(
+        existing.invoices.map((invoice) => [
+          invoice.subscriptionId,
+          {
+            totalAmount: invoice.totalAmount,
+            billingCycleDate: invoice.billingCycleDate,
+          },
+        ]),
+      );
+      return {
+        billingDate: runDate,
+        alreadyExecuted: true,
+        candidateCount: existing.candidateCount,
+        invoicedCount: existing.invoicedCount,
+        skippedCount: existing.skippedCount,
+        projectedTotal: existing.invoices.reduce(
+          (total, invoice) => total.plus(invoice.totalAmount),
+          new Prisma.Decimal(0),
+        ),
+        items: existing.items.map((item) => ({
+          subscriptionId: item.subscriptionId,
+          subscriptionNumber: item.subscription.subscriptionNumber,
+          billingCycleDate:
+            invoiceBySubscription.get(item.subscriptionId)?.billingCycleDate ??
+            dateOnly(item.subscription.nextBillingDate),
+          outcome: item.outcome,
+          estimatedTotal:
+            invoiceBySubscription
+              .get(item.subscriptionId)
+              ?.totalAmount.toString() ?? null,
+          message: item.message,
+        })),
+      };
+    }
+
+    const candidates = await this.prisma.subscription.findMany({
+      where: {
+        status: SubscriptionStatus.ACTIVE,
+        nextBillingDate: { lte: runDate },
+      },
+      include: { plan: true, items: true },
+      orderBy: [{ nextBillingDate: 'asc' }, { id: 'asc' }],
+    });
+    const items = candidates.map((subscription) => {
+      const cycleDate = dateOnly(subscription.nextBillingDate);
+      const expired =
+        cycleDate > dateOnly(subscription.expiryDate) ||
+        (subscription.plan.endDate !== null &&
+          subscription.plan.endDate !== undefined &&
+          cycleDate > dateOnly(subscription.plan.endDate));
+      const totals = expired ? null : calculateInvoiceTotals(subscription);
+      return {
+        subscriptionId: subscription.id,
+        subscriptionNumber: subscription.subscriptionNumber,
+        billingCycleDate: cycleDate,
+        outcome: expired ? BillingOutcome.SKIPPED : BillingOutcome.INVOICED,
+        estimatedTotal: totals?.totalAmount.toString() ?? null,
+        message: expired
+          ? 'Subscription or plan has expired before the billing cycle.'
+          : null,
+        totals,
+      };
+    });
+
+    return {
+      billingDate: runDate,
+      alreadyExecuted: false,
+      candidateCount: candidates.length,
+      invoicedCount: items.filter(
+        (item) => item.outcome === BillingOutcome.INVOICED,
+      ).length,
+      skippedCount: items.filter(
+        (item) => item.outcome === BillingOutcome.SKIPPED,
+      ).length,
+      projectedTotal: items.reduce(
+        (total, item) =>
+          total.plus(item.totals?.totalAmount ?? new Prisma.Decimal(0)),
+        new Prisma.Decimal(0),
+      ),
+      items: items.map(({ totals: _totals, ...item }) => item),
+    };
+  }
+}
+
+function calculateInvoiceTotals(subscription: {
+  subtotalAmount: Prisma.Decimal;
+  taxAmount: Prisma.Decimal;
+  discountAmount: Prisma.Decimal;
+}) {
+  return {
+    subtotalAmount: subscription.subtotalAmount,
+    taxAmount: subscription.taxAmount,
+    discountAmount: subscription.discountAmount,
+    totalAmount: subscription.subtotalAmount
+      .plus(subscription.taxAmount)
+      .minus(subscription.discountAmount),
+  };
 }
 
 function buildInvoice(
@@ -228,9 +333,8 @@ function buildInvoice(
       };
     }),
   ];
-  const subtotalAmount = subscription.subtotalAmount;
-  const taxAmount = subscription.taxAmount;
-  const discountAmount = subscription.discountAmount;
+  const { subtotalAmount, taxAmount, discountAmount, totalAmount } =
+    calculateInvoiceTotals(subscription);
   if (discountAmount.greaterThan(0)) {
     const discount = discountAmount.negated();
     invoiceItems.push({
@@ -244,8 +348,6 @@ function buildInvoice(
       totalAmount: discount,
     });
   }
-  const totalAmount = subtotalAmount.plus(taxAmount).minus(discountAmount);
-
   return {
     invoiceNumber: `INV-${issueDate.toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID().slice(0, 8).toUpperCase()}`,
     billingRun: { connect: { id: billingRunId } },

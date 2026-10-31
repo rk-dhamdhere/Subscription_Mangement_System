@@ -5,6 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -47,5 +48,15 @@ export class InvoiceController {
     @Req() request: Request & { user: { id: string } },
   ) {
     return this.invoices.transition(id, dto.status, request.user.id);
+  }
+
+  @Post(':id/email')
+  @UseGuards(FinanceAdminGuard)
+  @Roles(Role.ADMIN, Role.STAFF)
+  send(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() request: Request & { user: { id: string } },
+  ) {
+    return this.invoices.send(id, request.user.id);
   }
 }

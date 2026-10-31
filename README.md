@@ -1,6 +1,6 @@
 <div align="center">
 
-# Brightloop
+# Twin
 
 ### Subscription management, from quotation to payment.
 
@@ -17,7 +17,7 @@ An end-to-end subscription platform for managing a product catalog, customer sub
 | Area | Implementation |
 |---|---|
 | Customer experience | Twin landing page, customer portal, subscription and invoice views |
-| Staff experience | Sales lifecycle actions and a Finance dashboard |
+| Staff experience | Sales, Finance, and Admin workspaces with role-specific operations |
 | Backend | Versioned REST API built with NestJS and TypeScript |
 | Database | PostgreSQL 16, Docker Compose, Prisma ORM and migrations |
 | Authentication | JWT bearer tokens, Argon2id password hashing, role-based authorization |
@@ -25,12 +25,13 @@ An end-to-end subscription platform for managing a product catalog, customer sub
 
 ## Product capabilities
 
-- **Authentication and access control:** register and sign in; role-aware Admin, Sales, Finance, and Customer experiences; password reset by email.
-- **Catalog administration:** manage products, variants, plans, tax rules, discount rules, and quotation templates through the backend API. The current Admin UI displays the catalog.
-- **Subscription lifecycle:** create subscriptions or quotations from templates and move them through validated status transitions.
-- **Recurring billing:** run billing for a selected date, generate draft invoices, and advance subscription billing dates transactionally.
-- **Finance operations:** review dashboard metrics and invoices, confirm draft invoices, record payments, and allocate payments to invoice balances.
-- **Customer self-service:** view your own subscriptions and invoice history.
+- **Authentication and access control:** customer signup, sign-in, email password reset, and separate Admin, Sales, Finance, General staff, and Customer access.
+- **Catalog and staff administration:** manage products, variants, plans, tax and discount rules, quotation templates, and staff accounts.
+- **Subscription lifecycle:** create quotations from templates, enforce valid status transitions, and support plan-controlled pause, resume, close, and renewal actions.
+- **Recurring billing:** preview eligible subscriptions through a read-only backend endpoint; run a selected billing date to create draft invoices and advance due dates transactionally.
+- **Finance operations:** review dashboard metrics and aging, manage invoices, record payments, and allocate partial payments to outstanding balances.
+- **Customer self-service:** view subscriptions and invoices, manage eligible subscriptions, and pay confirmed INR invoices using Razorpay Checkout.
+- **Payments:** record offline methods or use server-verified Razorpay orders and signed webhook settlement.
 - **Auditability:** record important subscription, invoice, payment, and password-reset actions.
 
 ## Architecture
@@ -111,7 +112,7 @@ Finance selects billing date
     → Record invoiced/skipped outcomes
 ```
 
-A billing run is idempotent for a billing date, and database uniqueness protections prevent duplicate invoices for a subscription billing cycle. The Finance UI's **Preview billing** action is a client-side estimate from the subscription list; the API currently does not provide a dry-run endpoint. The execution result from the backend is authoritative.
+A billing run is idempotent for a billing date, and database uniqueness protections prevent duplicate invoices for a subscription billing cycle. **Preview billing** calls `POST /api/v1/billing-runs/preview` to evaluate the backend billing rules without writing records. Execution remains authoritative if subscriptions change after the preview.
 
 ### Invoice and payment
 
@@ -121,7 +122,7 @@ Draft invoice → Finance confirms invoice → Payment is recorded
     → Fully settled invoice is marked PAID
 ```
 
-Payments may be partially allocated. The service validates invoice ownership and available balance while recording allocations transactionally.
+Payments may be partially allocated. The service validates invoice ownership and available balance while recording allocations transactionally. For online checkout, the backend creates Razorpay orders and verifies payment signatures and captured amounts before settlement; signed webhooks use the same settlement path.
 
 ## Data model
 
@@ -152,11 +153,13 @@ The API prefix is `/api/v1`. Protected endpoints require `Authorization: Bearer 
 | Health | `GET /api/v1/health` |
 | Authentication | `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/password-reset/request`, `POST /api/v1/auth/password-reset/complete` |
 | Catalog (Admin) | `/api/v1/catalog/products`, `/api/v1/catalog/plans`, `/api/v1/catalog/tax-rules`, `/api/v1/catalog/discount-rules` |
+| Staff and customers | Admin: `GET/POST /api/v1/staff`, `PATCH /api/v1/staff/:id`; staff: `GET /api/v1/customers?search=...` |
 | Quotations (Admin) | `/api/v1/quotation-templates` |
-| Subscriptions | `GET/POST /api/v1/subscriptions`, `GET /api/v1/subscriptions/:id`, `POST /api/v1/subscriptions/from-template`, `PATCH /api/v1/subscriptions/:id/status` |
-| Billing (Admin/Finance) | `GET/POST /api/v1/billing-runs` |
-| Invoices | `GET /api/v1/invoices`, `GET /api/v1/invoices/:id`, `PATCH /api/v1/invoices/:id/status` |
+| Subscriptions | `GET/POST /api/v1/subscriptions`, `GET /api/v1/subscriptions/:id`, `POST /api/v1/subscriptions/from-template`, `POST /api/v1/subscriptions/:id/renew`, `PATCH /api/v1/subscriptions/:id/status` |
+| Billing (Admin/Finance) | `GET/POST /api/v1/billing-runs`, `POST /api/v1/billing-runs/preview` |
+| Invoices | `GET /api/v1/invoices`, `GET /api/v1/invoices/:id`, `PATCH /api/v1/invoices/:id/status`, `POST /api/v1/invoices/:id/email` |
 | Payments (Admin/Finance) | `GET/POST /api/v1/payments` |
+| Razorpay (Customer) | `POST /api/v1/payments/razorpay/orders`, `POST /api/v1/payments/razorpay/verify`; public signed webhook at `POST /api/v1/payments/razorpay/webhook` |
 | Finance (Admin/Finance) | `GET /api/v1/finance/dashboard`, `GET /api/v1/finance/receivables/aging` |
 
 See the live Swagger documentation for DTOs, request bodies, response schemas, and authorization details.
@@ -214,15 +217,18 @@ Set `BRIGHTLOOP_DEMO_PASSWORD` in `backend/.env` to a password of at least 12 ch
 npm run db:seed
 ```
 
-The seed creates these demo accounts, all using the configured demo password:
+The seed creates two Admins, three staff roles, and three customers. All use the configured demo password:
 
 | Role | Email |
 |---|---|
-| Admin | `admin@example.test` |
-| Finance staff | `finance@example.test` |
-| Customer | `customer@example.test` |
+| Admin | `admin@brightloop.example.test` |
+| Admin | `admin2@brightloop.example.test` |
+| Finance staff | `finance@brightloop.example.test` |
+| Sales staff | `sales@brightloop.example.test`, `sales2@brightloop.example.test` |
+| General staff | `operations@brightloop.example.test` |
+| Customer | `customer@brightloop.example.test`, `customer2@brightloop.example.test`, `customer3@brightloop.example.test` |
 
-The seed is explicit and is not run automatically.
+The seed is explicit and is not run automatically. Seed passwords must be at least 12 characters; customer signup and password reset require at least 9 characters with uppercase, lowercase, and a special character.
 
 ### 4. Run the frontend
 
@@ -245,6 +251,10 @@ The frontend's `/api/v1` proxy path is retained; the configured URL should inclu
 ### Password reset email
 
 Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`, and `FRONTEND_URL` in `backend/.env` to deliver reset emails. Without a working SMTP configuration, the password-reset request cannot deliver a token.
+
+### Razorpay test checkout
+
+Set `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` in `backend/.env` using Razorpay test-mode credentials. The key secret and webhook secret must remain backend-only. Set the webhook URL to `https://<your-api-host>/api/v1/payments/razorpay/webhook` and subscribe to the `payment.captured` event. Checkout is disabled until valid credentials are configured.
 
 ## Development and quality checks
 
@@ -288,14 +298,15 @@ docker-compose.yml    Local PostgreSQL service
 ## Project notes
 
 - The frontend and backend API are integrated for the currently implemented routes.
-- The billing preview is an estimate; use the billing run response for actual outcomes.
-- Staff management, subscription creation forms, quotation building UI, and customer payment history are not currently exposed as frontend workflows.
+- Billing preview is read-only and backend-calculated; use the billing run response for actual outcomes.
+- The Twin landing page is preserved from the pulled frontend version; account and workspace pages use Twin branding and the Twin logo.
 - The password-reset API requires SMTP configuration to send reset instructions.
+- Production frontend deployments must set `BRIGHTLOOP_API_URL` to a reachable backend URL ending in `/api/v1`; local Docker services are not publicly reachable from Vercel.
 
 ---
 
 <div align="center">
 
-**Brightloop — one place for the subscription lifecycle.**
+**Twin — one place for the subscription lifecycle.**
 
 </div>

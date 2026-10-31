@@ -1,8 +1,8 @@
 {
-  "name": "brightloop-backend",
+  "name": "twin-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "Brightloop Subscription Management Platform API",
+  "description": "Twin Subscription Management Platform API",
   "scripts": {
     "build": "nest build",
     "start": "nest start",
@@ -11,9 +11,9 @@
     "db:seed": "npm run build && node dist/database/seed.js",
     "lint": "eslint \"src/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:cov": "jest --coverage"
+    "test": "jest --preset=ts-jest",
+    "test:watch": "jest --preset=ts-jest --watch",
+    "test:cov": "jest --preset=ts-jest --coverage"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.0",
@@ -29,6 +29,7 @@
     "argon2": "^0.45.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.4",
+    "dotenv": "^17.4.2",
     "nodemailer": "^10.3.1",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",

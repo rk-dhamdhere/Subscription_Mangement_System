@@ -2,10 +2,12 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { InvoiceStatus, Prisma, Role } from '../generated/prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { TransitionableInvoiceStatus } from './dto/transition-invoice.dto';
+import { InvoiceMailer } from './invoice-mailer.service';
 
 const invoiceDetails = {
   items: true,
@@ -19,7 +21,10 @@ const invoiceDetails = {
 
 @Injectable()
 export class InvoiceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailer?: InvoiceMailer,
+  ) {}
 
   list(user: { id: string; role: Role }) {
     return this.prisma.invoice.findMany({
@@ -90,5 +95,35 @@ export class InvoiceService {
         include: invoiceDetails,
       });
     });
+  }
+
+  async send(id: string, actorId: string) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id },
+      include: invoiceDetails,
+    });
+    if (!invoice) throw new NotFoundException('invoice not found');
+    if (invoice.status === InvoiceStatus.DRAFT || invoice.status === InvoiceStatus.CANCELLED) {
+      throw new BadRequestException(
+        'only confirmed or paid invoices can be emailed',
+      );
+    }
+
+    if (!this.mailer) {
+      throw new ServiceUnavailableException(
+        'invoice email delivery is not configured',
+      );
+    }
+    await this.mailer.send(invoice);
+    await this.prisma.auditLog.create({
+      data: {
+        actorId,
+        action: 'INVOICE_EMAILED',
+        entityType: 'INVOICE',
+        entityId: invoice.id,
+        afterData: { recipient: invoice.customer.email },
+      },
+    });
+    return { message: `invoice ${invoice.invoiceNumber} emailed` };
   }
 }

@@ -17,6 +17,11 @@ export class BillingController {
     return this.billing.list();
   }
 
+  @Post('preview')
+  preview(@Body() dto: RunBillingDto) {
+    return this.billing.preview(new Date(dto.billingDate));
+  }
+
   @Post()
   run(
     @Body() dto: RunBillingDto,

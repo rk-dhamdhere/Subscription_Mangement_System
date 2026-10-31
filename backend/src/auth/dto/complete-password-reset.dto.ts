@@ -10,9 +10,9 @@ export class CompletePasswordResetDto {
   @MaxLength(128)
   token!: string;
 
-  @ApiProperty({ minLength: 8, maxLength: 128 })
+  @ApiProperty({ minLength: 9, maxLength: 128 })
   @IsString()
-  @MinLength(8)
+  @MinLength(9)
   @MaxLength(128)
   @Matches(/(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9])/, {
     message:

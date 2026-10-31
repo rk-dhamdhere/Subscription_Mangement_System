@@ -20,6 +20,7 @@ export class CreatePlanDto {
   @IsOptional() @IsDateString() endDate?: string;
   @IsOptional() @IsBoolean() autoClose?: boolean;
   @IsOptional() @IsBoolean() canPause?: boolean;
+  @IsOptional() @IsBoolean() canCloseEarly?: boolean;
   @IsOptional() @IsBoolean() canRenew?: boolean;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }

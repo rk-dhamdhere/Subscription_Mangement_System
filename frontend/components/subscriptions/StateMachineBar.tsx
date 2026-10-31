@@ -12,11 +12,12 @@ const STEPS: SubscriptionStatus[] = [
   'CLOSED',
 ]
 
-const NEXT_STATUS: Partial<Record<SubscriptionStatus, SubscriptionStatus>> = {
-  DRAFT: 'QUOTATION',
-  QUOTATION: 'CONFIRMED',
-  CONFIRMED: 'ACTIVE',
-  ACTIVE: 'CLOSED',
+const TRANSITIONS: Partial<Record<SubscriptionStatus, SubscriptionStatus[]>> = {
+  DRAFT: ['QUOTATION'],
+  QUOTATION: ['CONFIRMED'],
+  CONFIRMED: ['ACTIVE'],
+  ACTIVE: ['PAUSED', 'CLOSED'],
+  PAUSED: ['ACTIVE', 'CLOSED'],
 }
 
 const ACTION_LABEL: Record<SubscriptionStatus, string> = {
@@ -24,6 +25,7 @@ const ACTION_LABEL: Record<SubscriptionStatus, string> = {
   QUOTATION: 'Confirm quotation',
   CONFIRMED: 'Activate subscription',
   ACTIVE: 'Close subscription',
+  PAUSED: 'Resume subscription',
   CLOSED: 'Closed',
 }
 
@@ -32,14 +34,24 @@ export function StateMachineBar({
   onTransition,
   isLoading,
   isStaffOrAdmin,
+  canPause,
+  canCloseEarly,
 }: {
   currentStatus: SubscriptionStatus
   onTransition: (targetStatus: SubscriptionStatus) => void
   isLoading: boolean
   isStaffOrAdmin: boolean
+  canPause: boolean
+  canCloseEarly: boolean
 }) {
-  const currentIndex = STEPS.indexOf(currentStatus)
-  const nextStatus = NEXT_STATUS[currentStatus]
+  const currentIndex = STEPS.indexOf(currentStatus === 'PAUSED' ? 'ACTIVE' : currentStatus)
+  const transitions = (TRANSITIONS[currentStatus] ?? []).filter((status) => {
+    if (status === 'PAUSED' || (currentStatus === 'PAUSED' && status === 'ACTIVE')) {
+      return canPause
+    }
+    return status !== 'CLOSED' || canCloseEarly
+  })
+  const nextStatus = transitions.length === 1 ? transitions[0] : null
 
   return (
     <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
@@ -76,21 +88,26 @@ export function StateMachineBar({
           )
         })}
       </ol>
-      {isStaffOrAdmin && nextStatus && (
+      {isStaffOrAdmin && transitions.length > 0 && (
         <div className="mt-4 flex justify-end border-t border-white/[0.07] pt-4">
-          <button
-            type="button"
-            disabled={isLoading}
-            onClick={() => onTransition(nextStatus)}
-            className={`inline-flex h-9 items-center gap-2 rounded-full px-4 text-xs font-medium transition disabled:cursor-wait disabled:opacity-50 ${
-              nextStatus === 'CLOSED'
-                ? 'border border-rose-300/20 bg-rose-400/[0.08] text-rose-200 hover:bg-rose-400/[0.15]'
-                : 'bg-emerald-400 text-[#07120d] hover:bg-emerald-300'
-            }`}
-          >
-            {isLoading ? 'Updating…' : ACTION_LABEL[currentStatus]}
-            {!isLoading && <ArrowRight className="size-3.5" />}
-          </button>
+          <div className="flex flex-wrap justify-end gap-2">
+            {transitions.map((status) => (
+              <button
+                key={status}
+                type="button"
+                disabled={isLoading}
+                onClick={() => onTransition(status)}
+                className={`inline-flex h-9 items-center gap-2 rounded-full px-4 text-xs font-medium transition disabled:cursor-wait disabled:opacity-50 ${
+                  status === 'CLOSED'
+                    ? 'border border-rose-300/20 bg-rose-400/[0.08] text-rose-200 hover:bg-rose-400/[0.15]'
+                    : 'bg-emerald-400 text-[#07120d] hover:bg-emerald-300'
+                }`}
+              >
+                {isLoading ? 'Updating…' : status === 'CLOSED' ? 'Close subscription' : nextStatus ? ACTION_LABEL[currentStatus] : status === 'PAUSED' ? 'Pause subscription' : 'Resume subscription'}
+                {!isLoading && <ArrowRight className="size-3.5" />}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>

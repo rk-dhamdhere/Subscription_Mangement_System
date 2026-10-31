@@ -1,7 +1,8 @@
 'use client'
 
 import { FormEvent, useState } from 'react'
-import { ArrowLeft, KeyRound, Network } from 'lucide-react'
+import Image from 'next/image'
+import { ArrowLeft, KeyRound } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { apiClient } from '@/services/apiClient'
 
@@ -49,8 +50,8 @@ export default function ResetPasswordPage() {
         className="relative w-full max-w-[430px] rounded-[26px] border border-white/[0.1] bg-[#101210]/90 p-7 shadow-[0_24px_100px_rgba(0,0,0,0.42)] backdrop-blur-xl sm:p-9"
       >
         <a href="/" className="mb-9 inline-flex items-center gap-2.5">
-          <span className="grid size-9 place-items-center rounded-xl border border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-300"><Network className="size-4" /></span>
-          <span className="text-[17px] font-semibold tracking-[-0.06em]">Brightloop</span>
+          <Image src="/twin-logo.png" alt="" width={36} height={36} className="size-9 object-contain" />
+          <span className="text-[17px] font-semibold tracking-[-0.06em]">Twin</span>
         </a>
         <p className="mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-emerald-300/75"><KeyRound className="size-3.5" /> Account recovery</p>
         <h1 className="text-3xl font-medium tracking-[-0.055em]">{mode === 'request' ? 'Reset your password' : 'Choose a new password'}</h1>
@@ -69,7 +70,7 @@ export default function ResetPasswordPage() {
           {mode === 'request' ? (
             <label className="block text-xs text-neutral-300">
               Email address
-              <input type="email" autoComplete="email" required maxLength={255} value={email} onChange={(event) => setEmail(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#080908] px-3.5 text-sm outline-none transition focus:border-emerald-300/50" placeholder="you@company.com" />
+              <input type="email" autoComplete="email" required maxLength={255} value={email} onChange={(event) => setEmail(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#080908] px-3.5 text-sm outline-none transition focus:border-emerald-300/50" placeholder="name@business.com" />
             </label>
           ) : (
             <>
@@ -79,7 +80,7 @@ export default function ResetPasswordPage() {
               </label>
               <label className="block text-xs text-neutral-300">
                 New password
-                <input type="password" autoComplete="new-password" required minLength={8} maxLength={128} pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,128}" title="Use uppercase, lowercase, and a special character." value={password} onChange={(event) => setPassword(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#080908] px-3.5 text-sm outline-none transition focus:border-emerald-300/50" placeholder="Use uppercase, lowercase, and a symbol" />
+                <input type="password" autoComplete="new-password" required minLength={9} maxLength={128} pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{9,128}" title="Use at least 9 characters with uppercase, lowercase, and a special character." value={password} onChange={(event) => setPassword(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#080908] px-3.5 text-sm outline-none transition focus:border-emerald-300/50" placeholder="At least 9 characters, with a symbol" />
               </label>
             </>
           )}

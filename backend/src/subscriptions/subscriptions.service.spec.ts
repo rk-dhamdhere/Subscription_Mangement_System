@@ -6,7 +6,7 @@ jest.mock('@nestjs/common', () => ({
   NotFoundException: class extends Error {},
 }));
 
-import { Prisma } from '../generated/prisma/client';
+import { Prisma, Role, SubscriptionStatus } from '../generated/prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { QuotationsService } from '../quotations/quotations.service';
 import { SubscriptionsService } from './subscriptions.service';
@@ -101,5 +101,117 @@ describe('SubscriptionsService', () => {
       data: { currentUses: { increment: 1 } },
     });
     expect(tx.auditLog.create).toHaveBeenCalled();
+  });
+
+  it('restricts customer pause, resume, and early-close actions to owned subscriptions and plan policy', async () => {
+    const subscription = {
+      id: 'subscription-id',
+      customerId: 'customer-id',
+      status: SubscriptionStatus.ACTIVE,
+      plan: { canPause: false, canCloseEarly: true },
+    };
+    const tx = {
+      subscription: {
+        findFirst: resolved(subscription),
+        updateMany: jest.fn(),
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn(
+        <T>(callback: (transaction: typeof tx) => Promise<T>) => callback(tx),
+      ),
+    } as unknown as PrismaService;
+
+    await expect(
+      new SubscriptionsService(prisma, {} as QuotationsService).transition(
+        subscription.id,
+        SubscriptionStatus.PAUSED,
+        { id: 'customer-id', role: Role.CUSTOMER },
+      ),
+    ).rejects.toThrow('this plan does not allow pausing');
+    expect(tx.subscription.findFirst).toHaveBeenCalledWith({
+      where: { id: subscription.id, customerId: 'customer-id' },
+      include: { plan: true },
+    });
+    expect(tx.subscription.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('creates an audited renewal draft using the previous price and item snapshots', async () => {
+    const current = {
+      id: 'closed-subscription',
+      customerId: 'customer-id',
+      planId: 'plan-id',
+      status: SubscriptionStatus.CLOSED,
+      startDate: new Date('2025-01-01T00:00:00.000Z'),
+      expiryDate: new Date('2026-01-01T00:00:00.000Z'),
+      paymentTerms: 'NET_30',
+      subtotalAmount: new Prisma.Decimal(150),
+      taxAmount: new Prisma.Decimal(15),
+      discountAmount: new Prisma.Decimal(0),
+      totalAmount: new Prisma.Decimal(165),
+      plan: {
+        id: 'plan-id',
+        canRenew: true,
+        isActive: true,
+        startDate: new Date('2025-01-01T00:00:00.000Z'),
+        endDate: null,
+      },
+      items: [{
+        productId: 'product-id',
+        variantId: null,
+        productName: 'Workspace',
+        variantName: null,
+        quantity: 1,
+        unitPrice: new Prisma.Decimal(50),
+        taxRate: new Prisma.Decimal(10),
+        subtotal: new Prisma.Decimal(50),
+      }],
+    };
+    const created = { id: 'renewal-id', status: SubscriptionStatus.DRAFT };
+    const tx = {
+      subscription: {
+        findFirst: resolved(current),
+        create: jest.fn<() => Promise<typeof created>>().mockResolvedValue(created),
+      },
+      auditLog: { create: resolved({ id: 'audit-id' }) },
+    };
+    const prisma = {
+      $transaction: jest.fn(
+        <T>(callback: (transaction: typeof tx) => Promise<T>) => callback(tx),
+      ),
+    } as unknown as PrismaService;
+
+    await expect(
+      new SubscriptionsService(prisma, {} as QuotationsService).renew(
+        current.id,
+        { id: 'customer-id', role: Role.CUSTOMER },
+      ),
+    ).resolves.toBe(created);
+    expect(tx.subscription.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        customerId: 'customer-id',
+        planId: 'plan-id',
+        status: SubscriptionStatus.DRAFT,
+        subtotalAmount: current.subtotalAmount,
+        taxAmount: current.taxAmount,
+        totalAmount: current.totalAmount,
+        items: {
+          create: [expect.objectContaining({
+            productName: 'Workspace',
+            unitPrice: new Prisma.Decimal(50),
+            taxRate: new Prisma.Decimal(10),
+          })],
+        },
+      }),
+      include: { items: true, plan: true },
+    });
+    expect(tx.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'SUBSCRIPTION_RENEWAL_DRAFT_CREATED',
+          entityId: 'renewal-id',
+        }),
+      }),
+    );
   });
 });

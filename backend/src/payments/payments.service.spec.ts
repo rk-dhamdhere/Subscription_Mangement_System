@@ -4,6 +4,9 @@ class MockHttpException extends Error {}
 
 jest.mock('@nestjs/common', () => ({
   Injectable: () => (target: unknown) => target,
+  Logger: class {
+    error = jest.fn();
+  },
   BadRequestException: MockHttpException,
   NotFoundException: MockHttpException,
 }));
@@ -95,5 +98,48 @@ describe('PaymentsService', () => {
       new PaymentsService(prisma).record(dto, 'finance-id'),
     ).rejects.toThrow('allocations cannot exceed the payment amount');
     expect(transaction).not.toHaveBeenCalled();
+  });
+
+  it('reuses an existing pending Razorpay order for the same invoice', async () => {
+    const previousKeyId = process.env.RAZORPAY_KEY_ID;
+    const previousKeySecret = process.env.RAZORPAY_KEY_SECRET;
+    process.env.RAZORPAY_KEY_ID = 'rzp_test_public';
+    process.env.RAZORPAY_KEY_SECRET = 'test-secret';
+    const pending = {
+      orderId: 'order-existing',
+      amountMinor: 12500,
+      currency: 'INR',
+    };
+    const prisma = {
+      invoice: {
+        findFirst: resolved({
+          id: 'invoice-id',
+          invoiceNumber: 'BL-2026-001',
+          amountDue: new Prisma.Decimal(125),
+        }),
+      },
+      razorpayOrder: { findFirst: resolved(pending) },
+    } as unknown as PrismaService;
+
+    try {
+      await expect(
+        new PaymentsService(prisma).createRazorpayOrder(
+          'invoice-id',
+          'customer-id',
+        ),
+      ).resolves.toEqual({
+        keyId: 'rzp_test_public',
+        orderId: pending.orderId,
+        amount: pending.amountMinor,
+        currency: pending.currency,
+        invoiceNumber: 'BL-2026-001',
+      });
+    } finally {
+      if (previousKeyId === undefined) delete process.env.RAZORPAY_KEY_ID;
+      else process.env.RAZORPAY_KEY_ID = previousKeyId;
+      if (previousKeySecret === undefined)
+        delete process.env.RAZORPAY_KEY_SECRET;
+      else process.env.RAZORPAY_KEY_SECRET = previousKeySecret;
+    }
   });
 });

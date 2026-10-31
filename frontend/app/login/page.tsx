@@ -1,11 +1,13 @@
 'use client'
 
 import { FormEvent, useEffect, useState } from 'react'
-import { ArrowRight, Network, Sparkles } from 'lucide-react'
+import Image from 'next/image'
+import { ArrowRight, Sparkles } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { apiClient } from '@/services/apiClient'
 import { getHomeRoute, hydrateAuthStore, useAuthStore } from '@/store/useAuthStore'
-import type { BackendStaffRole, LoginResponse, User, UserRole } from '@/types/api'
+import { userFromAccessToken } from '@/lib/auth'
+import type { LoginResponse } from '@/types/api'
 
 export default function LoginPage() {
   const { hydrated, setAuth, user } = useAuthStore()
@@ -55,10 +57,8 @@ export default function LoginPage() {
         className="relative w-full max-w-[430px] rounded-[26px] border border-white/[0.1] bg-[#101210]/90 p-7 shadow-[0_24px_100px_rgba(0,0,0,0.42)] backdrop-blur-xl sm:p-9"
       >
         <a href="/" className="mb-9 inline-flex items-center gap-2.5">
-          <span className="grid size-9 place-items-center rounded-xl border border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-300">
-            <Network className="size-4" />
-          </span>
-          <span className="text-[17px] font-semibold tracking-[-0.06em]">Brightloop</span>
+          <Image src="/twin-logo.png" alt="" width={36} height={36} className="size-9 object-contain" />
+          <span className="text-[17px] font-semibold tracking-[-0.06em]">Twin</span>
         </a>
         <p className="mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-emerald-300/75">
           <Sparkles className="size-3.5" /> Secure workspace
@@ -77,7 +77,7 @@ export default function LoginPage() {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#080908] px-3.5 text-sm text-white outline-none transition placeholder:text-neutral-600 focus:border-emerald-300/50 focus:ring-2 focus:ring-emerald-300/10"
-              placeholder="you@company.com"
+              placeholder="name@business.com"
             />
           </label>
           <label className="block text-xs text-neutral-300">
@@ -106,53 +106,12 @@ export default function LoginPage() {
 
         <div className="mt-6 flex items-center justify-between border-t border-white/[0.08] pt-5 text-xs">
           <a href="/reset-password" className="text-neutral-400 transition hover:text-emerald-200">Forgot password?</a>
-          <a href="/" className="text-neutral-500 transition hover:text-white">Back to Twin</a>
+          <a href="/register" className="text-neutral-400 transition hover:text-emerald-200">Create customer account</a>
+        </div>
+        <div className="mt-6 rounded-xl border border-white/[0.07] bg-white/[0.025] px-4 py-3 text-[11px] leading-5 text-neutral-500">
+          Demo accounts are listed in the project README. All seeded accounts share the configured demo password.
         </div>
       </motion.section>
     </main>
   )
-}
-
-function userFromAccessToken(token: string): User {
-  const parts = token.split('.')
-  if (parts.length !== 3) throw new Error('The server returned an invalid access token.')
-
-  let claims: unknown
-  try {
-    const encoded = parts[1].replace(/-/g, '+').replace(/_/g, '/')
-    claims = JSON.parse(window.atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, '=')))
-  } catch {
-    throw new Error('The server returned an unreadable access token.')
-  }
-
-  if (typeof claims !== 'object' || claims === null) {
-    throw new Error('The server returned incomplete account information.')
-  }
-  const payload = claims as {
-    sub?: unknown
-    email?: unknown
-    role?: unknown
-    staffRole?: unknown
-    exp?: unknown
-  }
-  if (
-    typeof payload.sub !== 'string' ||
-    typeof payload.email !== 'string' ||
-    !['ADMIN', 'STAFF', 'CUSTOMER'].includes(String(payload.role)) ||
-    (typeof payload.exp === 'number' && payload.exp * 1000 <= Date.now())
-  ) {
-    throw new Error('The server returned incomplete or expired account information.')
-  }
-
-  const role = payload.role as UserRole
-  const staffRole = payload.staffRole as BackendStaffRole | undefined
-  return {
-    id: payload.sub,
-    email: payload.email,
-    fullName: payload.email,
-    role,
-    ...(role === 'STAFF'
-      ? { subRole: staffRole === 'SALES' || staffRole === 'FINANCE' ? staffRole : 'GENERAL' }
-      : {}),
-  }
 }

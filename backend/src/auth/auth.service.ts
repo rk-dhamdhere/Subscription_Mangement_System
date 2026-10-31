@@ -40,7 +40,14 @@ export class AuthService {
         lastName: dto.lastName.trim(),
       },
     });
-    return this.issueToken(user.id, user.email, user.role, user.staffRole, 0);
+    return this.issueToken(
+      user.id,
+      user.email,
+      user.role,
+      user.staffRole,
+      0,
+      `${user.firstName} ${user.lastName}`,
+    );
   }
 
   async login(dto: LoginDto) {
@@ -60,6 +67,7 @@ export class AuthService {
       user.role,
       user.staffRole,
       user.tokenVersion,
+      `${user.firstName} ${user.lastName}`,
     );
   }
 
@@ -156,6 +164,7 @@ export class AuthService {
     role: string,
     staffRole: string,
     tokenVersion: number,
+    fullName: string,
   ) {
     return {
       accessToken: await this.jwt.signAsync({
@@ -164,6 +173,7 @@ export class AuthService {
         role,
         staffRole,
         tokenVersion,
+        fullName,
       }),
       tokenType: 'Bearer',
     };

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { CalendarDays, Eye, Play } from 'lucide-react'
 import { apiClient } from '@/services/apiClient'
 import { formatCurrency, formatDate, localDateInputValue } from '@/lib/format'
-import type { BillingPreview, BillingRun, Subscription } from '@/types/api'
+import type { BillingPreview, BillingRun } from '@/types/api'
 import { ErrorMessage, Surface, StatusPill } from '@/components/workspace/WorkspaceShell'
 
 export function BillingSimulator({
@@ -28,8 +28,11 @@ export function BillingSimulator({
     setError('')
     setRun(null)
     try {
-      const subscriptions = await apiClient.get<Subscription[]>('/subscriptions')
-      setPreview(calculatePreview(subscriptions, targetDate))
+      const result = await apiClient.post<BillingPreview>(
+        '/billing-runs/preview',
+        { billingDate: targetDate },
+      )
+      setPreview(result)
     } catch (requestError) {
       setError(errorText(requestError))
     } finally {
@@ -106,17 +109,55 @@ export function BillingSimulator({
       </div>
 
       <p className="mt-4 text-[11px] leading-5 text-neutral-500">
-        Preview is an estimate calculated from active subscriptions. The backend currently exposes the execution endpoint only; its billing engine determines final skips and invoice totals.
+        This read-only preview uses the backend billing rules. Execution is still subject to subscription changes between preview and run.
       </p>
 
       {error && <div className="mt-4"><ErrorMessage message={error} /></div>}
 
       {preview && (
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-live="polite">
-          <PreviewMetric label="Subscriptions due" value={preview.dueCount.toString()} />
-          <PreviewMetric label="Estimated invoices" value={preview.invoicesToCreate.toString()} />
-          <PreviewMetric label="Potential skips" value={preview.skippedCount.toString()} />
-          <PreviewMetric label="Projected revenue" value={formatCurrency(preview.projectedTotal)} />
+        <div className="mt-5 space-y-4" aria-live="polite">
+          {preview.alreadyExecuted && (
+            <p className="rounded-lg border border-amber-300/20 bg-amber-300/[0.06] px-3 py-2 text-xs text-amber-100">
+              A billing run already exists for this date. Execute will return that existing run without creating invoices again.
+            </p>
+          )}
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <PreviewMetric label="Candidates" value={preview.candidateCount.toString()} />
+            <PreviewMetric label="Invoices to create" value={preview.invoicedCount.toString()} />
+            <PreviewMetric label="Expected skips" value={preview.skippedCount.toString()} />
+            <PreviewMetric label="Projected total" value={formatCurrency(preview.projectedTotal)} />
+          </div>
+          {preview.items.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[620px] text-left text-xs">
+                <thead className="text-[10px] uppercase tracking-[0.12em] text-neutral-500">
+                  <tr>
+                    <th className="pb-3 font-medium">Subscription</th>
+                    <th className="pb-3 font-medium">Cycle date</th>
+                    <th className="pb-3 font-medium">Result</th>
+                    <th className="pb-3 font-medium">Estimated total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.06]">
+                  {preview.items.map((item) => (
+                    <tr key={item.subscriptionId}>
+                      <td className="py-3 pr-4 text-neutral-200">{item.subscriptionNumber}</td>
+                      <td className="py-3 pr-4 text-neutral-400">{formatDate(item.billingCycleDate)}</td>
+                      <td className="py-3 pr-4">
+                        <span className={item.outcome === 'INVOICED' ? 'text-emerald-200' : 'text-amber-200'}>
+                          {item.outcome}
+                        </span>
+                        {item.message && <p className="mt-1 text-[10px] text-neutral-500">{item.message}</p>}
+                      </td>
+                      <td className="py-3 text-neutral-300">
+                        {item.estimatedTotal === null ? '—' : formatCurrency(item.estimatedTotal)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -149,35 +190,6 @@ function PreviewMetric({ label, value }: { label: string; value: string }) {
       <p className="mt-2 text-lg font-medium tracking-[-0.04em] text-white">{value}</p>
     </div>
   )
-}
-
-function calculatePreview(
-  subscriptions: Subscription[],
-  targetDate: string,
-): BillingPreview {
-  const due = subscriptions.filter(
-    (subscription) =>
-      subscription.status === 'ACTIVE' &&
-      subscription.nextBillingDate.slice(0, 10) <= targetDate,
-  )
-  const eligible = due.filter((subscription) => {
-    const cycleDate = subscription.nextBillingDate.slice(0, 10)
-    const subscriptionExpired = cycleDate > subscription.expiryDate.slice(0, 10)
-    const planExpired =
-      subscription.plan.endDate !== null &&
-      cycleDate > subscription.plan.endDate.slice(0, 10)
-    return !subscriptionExpired && !planExpired
-  })
-
-  return {
-    dueCount: due.length,
-    invoicesToCreate: eligible.length,
-    skippedCount: due.length - eligible.length,
-    projectedTotal: eligible.reduce(
-      (total, subscription) => total + Number(subscription.totalAmount),
-      0,
-    ),
-  }
 }
 
 function errorText(error: unknown): string {

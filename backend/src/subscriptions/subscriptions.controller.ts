@@ -55,11 +55,21 @@ export class SubscriptionsController {
   }
 
   @Patch(':id/status')
+  @Roles(Role.ADMIN, Role.STAFF, Role.CUSTOMER)
   transition(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: TransitionSubscriptionDto,
-    @Req() request: Request & { user: { id: string } },
+    @Req() request: Request & { user: { id: string; role: Role } },
   ) {
-    return this.subscriptions.transition(id, dto.status, request.user.id);
+    return this.subscriptions.transition(id, dto.status, request.user);
+  }
+
+  @Post(':id/renew')
+  @Roles(Role.ADMIN, Role.STAFF, Role.CUSTOMER)
+  renew(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() request: Request & { user: { id: string; role: Role } },
+  ) {
+    return this.subscriptions.renew(id, request.user);
   }
 }

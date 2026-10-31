@@ -273,20 +273,61 @@ export class SubscriptionsService {
     return subscription;
   }
 
-  async transition(id: string, next: SubscriptionStatus, actorId: string) {
+  async transition(
+    id: string,
+    next: SubscriptionStatus,
+    actor: { id: string; role: Role },
+  ) {
     return this.prisma.$transaction(async (tx) => {
-      const subscription = await tx.subscription.findUnique({ where: { id } });
+      const subscription = await tx.subscription.findFirst({
+        where: {
+          id,
+          ...(actor.role === Role.CUSTOMER ? { customerId: actor.id } : {}),
+        },
+        include: { plan: true },
+      });
       if (!subscription) throw new NotFoundException('subscription not found');
       const allowed: Record<SubscriptionStatus, SubscriptionStatus[]> = {
         DRAFT: ['QUOTATION'],
         QUOTATION: ['CONFIRMED'],
         CONFIRMED: ['ACTIVE'],
-        ACTIVE: ['CLOSED'],
+        ACTIVE: ['PAUSED', 'CLOSED'],
+        PAUSED: ['ACTIVE', 'CLOSED'],
         CLOSED: [],
       };
       if (!allowed[subscription.status].includes(next)) {
         throw new BadRequestException(
           `cannot transition from ${subscription.status} to ${next}`,
+        );
+      }
+      if (
+        (next === SubscriptionStatus.PAUSED ||
+          (subscription.status === SubscriptionStatus.PAUSED &&
+            next === SubscriptionStatus.ACTIVE)) &&
+        !subscription.plan.canPause
+      ) {
+        throw new BadRequestException('this plan does not allow pausing');
+      }
+      if (
+        next === SubscriptionStatus.CLOSED &&
+        (subscription.status === SubscriptionStatus.ACTIVE ||
+          subscription.status === SubscriptionStatus.PAUSED) &&
+        !subscription.plan.canCloseEarly
+      ) {
+        throw new BadRequestException(
+          'this plan does not allow early closure',
+        );
+      }
+      if (
+        actor.role === Role.CUSTOMER &&
+        !new Set<SubscriptionStatus>([
+          SubscriptionStatus.PAUSED,
+          SubscriptionStatus.ACTIVE,
+          SubscriptionStatus.CLOSED,
+        ]).has(next)
+      ) {
+        throw new BadRequestException(
+          'customers can only pause, resume, or close their subscription',
         );
       }
       if (
@@ -314,7 +355,7 @@ export class SubscriptionsService {
       }
       await tx.auditLog.create({
         data: {
-          actorId,
+          actorId: actor.id,
           action: `SUBSCRIPTION_${next}`,
           entityType: 'SUBSCRIPTION',
           entityId: id,
@@ -328,4 +369,100 @@ export class SubscriptionsService {
       });
     });
   }
+
+  async renew(id: string, actor: { id: string; role: Role }) {
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.subscription.findFirst({
+        where: {
+          id,
+          ...(actor.role === Role.CUSTOMER ? { customerId: actor.id } : {}),
+        },
+        include: { plan: true, items: true },
+      });
+      if (!current) throw new NotFoundException('subscription not found');
+      if (current.status !== SubscriptionStatus.CLOSED) {
+        throw new BadRequestException(
+          'only a closed subscription can be renewed',
+        );
+      }
+      if (!current.plan.canRenew || !current.plan.isActive) {
+        throw new BadRequestException('this plan is not available for renewal');
+      }
+
+      const today = dateOnly(new Date());
+      const previousStart = dateOnly(current.startDate);
+      const previousExpiry = dateOnly(current.expiryDate);
+      const startDate =
+        previousExpiry >= today ? addDays(previousExpiry, 1) : today;
+      if (
+        current.plan.startDate > startDate ||
+        (current.plan.endDate && current.plan.endDate < startDate)
+      ) {
+        throw new BadRequestException(
+          'plan is not available on the renewal start date',
+        );
+      }
+      const durationDays = Math.max(
+        1,
+        Math.ceil(
+          (previousExpiry.getTime() - previousStart.getTime()) / 86400000,
+        ),
+      );
+      const expiryDate = addDays(startDate, durationDays);
+      const renewed = await tx.subscription.create({
+        data: {
+          subscriptionNumber: `SUB-${randomUUID().toUpperCase()}`,
+          customerId: current.customerId,
+          planId: current.planId,
+          status: SubscriptionStatus.DRAFT,
+          startDate,
+          expiryDate,
+          nextBillingDate: startDate,
+          paymentTerms: current.paymentTerms,
+          subtotalAmount: current.subtotalAmount,
+          taxAmount: current.taxAmount,
+          discountAmount: current.discountAmount,
+          totalAmount: current.totalAmount,
+          items: {
+            create: current.items.map((item) => ({
+              productId: item.productId,
+              variantId: item.variantId,
+              productName: item.productName,
+              variantName: item.variantName,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              taxRate: item.taxRate,
+              subtotal: item.subtotal,
+            })),
+          },
+        },
+        include: { items: true, plan: true },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: 'SUBSCRIPTION_RENEWAL_DRAFT_CREATED',
+          entityType: 'SUBSCRIPTION',
+          entityId: renewed.id,
+          afterData: {
+            renewedFromId: current.id,
+            status: renewed.status,
+          },
+        },
+      });
+      return renewed;
+    });
+  }
+}
+
+function dateOnly(date: Date): Date {
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
+}
+
+function addDays(date: Date, count: number): Date {
+  const result = new Date(date);
+  result.setUTCDate(result.getUTCDate() + count);
+  return result;
 }

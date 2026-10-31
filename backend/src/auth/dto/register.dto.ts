@@ -12,7 +12,7 @@ export class RegisterDto {
   email!: string;
 
   @IsString()
-  @MinLength(8)
+  @MinLength(9)
   @MaxLength(128)
   @Matches(/(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9])/, {
     message:

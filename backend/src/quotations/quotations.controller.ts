@@ -13,6 +13,7 @@ export class QuotationsController {
   constructor(private readonly quotations: QuotationsService) {}
 
   @Get()
+  @Roles(Role.ADMIN, Role.STAFF)
   list() {
     return this.quotations.listTemplates();
   }

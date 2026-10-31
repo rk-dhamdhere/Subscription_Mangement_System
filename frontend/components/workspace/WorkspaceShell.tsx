@@ -1,7 +1,8 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { ArrowUpRight, LogOut, Network } from 'lucide-react'
+import Image from 'next/image'
+import { ArrowUpRight, LogOut } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { getHomeRoute, useAuthStore } from '@/store/useAuthStore'
 import type { User } from '@/types/api'
@@ -28,10 +29,8 @@ export function WorkspaceShell({
       <header className="sticky top-0 z-30 border-b border-white/[0.07] bg-[#080908]/90 backdrop-blur-xl">
         <div className="mx-auto flex min-h-[68px] max-w-[1440px] items-center justify-between gap-5 px-5 sm:px-8 lg:px-12">
           <a href={user ? getHomeRoute(user) : '/'} className="flex items-center gap-2.5">
-            <span className="grid size-8 place-items-center rounded-xl border border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-300">
-              <Network className="size-4" />
-            </span>
-            <span className="text-[17px] font-semibold tracking-[-0.06em]">Brightloop</span>
+            <Image src="/twin-logo.png" alt="" width={32} height={32} className="size-8 object-contain" />
+            <span className="text-[17px] font-semibold tracking-[-0.06em]">Twin</span>
           </a>
           <div className="flex items-center gap-3 sm:gap-5">
             <a href="/" className="hidden items-center gap-1 text-xs text-neutral-500 transition hover:text-emerald-200 sm:inline-flex">
@@ -66,7 +65,7 @@ export function WorkspaceShell({
         >
           <div className="mb-8">
             <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.2em] text-emerald-300/75">
-              Brightloop workspace
+              Twin workspace
             </p>
             <h1 className="text-3xl font-medium tracking-[-0.055em] sm:text-4xl">{title}</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-400">{description}</p>

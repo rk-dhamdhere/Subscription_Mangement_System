@@ -1,9 +1,9 @@
 export function formatCurrency(value: string | number): string {
   const amount = typeof value === 'number' ? value : Number(value)
-  if (!Number.isFinite(amount)) return '$0.00'
-  return new Intl.NumberFormat('en-US', {
+  if (!Number.isFinite(amount)) return '₹0.00'
+  return new Intl.NumberFormat('en-IN', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'INR',
   }).format(amount)
 }
 

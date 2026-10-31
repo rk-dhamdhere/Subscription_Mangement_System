@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Boxes, PackageCheck } from 'lucide-react'
+import { CatalogManagement } from '@/components/admin/CatalogManagement'
+import { StaffManagement } from '@/components/admin/StaffManagement'
 import { AccessGate } from '@/components/workspace/AccessGate'
 import {
   ErrorMessage,
@@ -22,25 +24,24 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    let active = true
-    Promise.all([
+  const refreshCatalog = useCallback(async () => {
+    const [productList, planList, taxRuleList, discountRuleList] = await Promise.all([
       apiClient.get<Product[]>('/catalog/products'),
       apiClient.get<Plan[]>('/catalog/plans'),
       apiClient.get<TaxRule[]>('/catalog/tax-rules'),
       apiClient.get<DiscountRule[]>('/catalog/discount-rules'),
     ])
-      .then(([productList, planList, taxRuleList, discountRuleList]) => {
-        if (!active) return
-        setProducts(productList)
-        setPlans(planList)
-        setTaxRules(taxRuleList)
-        setDiscountRules(discountRuleList)
-      })
+    setProducts(productList)
+    setPlans(planList)
+    setTaxRules(taxRuleList)
+    setDiscountRules(discountRuleList)
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    void refreshCatalog()
       .catch((requestError: unknown) => {
-        if (active) {
-          setError(requestError instanceof Error ? requestError.message : 'Unable to load catalog data.')
-        }
+        if (active) setError(requestError instanceof Error ? requestError.message : 'Unable to load catalog data.')
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -48,19 +49,20 @@ export default function AdminPage() {
     return () => {
       active = false
     }
-  }, [])
+  }, [refreshCatalog])
 
   return (
     <AccessGate roles={['ADMIN']}>
       <WorkspaceShell
         title="Admin catalog"
-        description="Review the products, variants, and subscription plans available across Brightloop."
+        description="Manage staff and review the products, variants, and plans available across Twin."
       >
         {error && <ErrorMessage message={error} />}
         {loading ? (
           <LoadingMessage label="Loading product and plan catalog…" />
         ) : !error ? (
           <div className="space-y-5">
+            <CatalogManagement products={products} plans={plans} onCreated={refreshCatalog} />
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <div className="flex items-center gap-4 rounded-2xl border border-white/[0.09] bg-[#101210]/90 p-5">
                 <span className="grid size-10 place-items-center rounded-xl bg-emerald-300/[0.09] text-emerald-200"><Boxes className="size-5" /></span>
@@ -91,7 +93,7 @@ export default function AdminPage() {
                           <td className="py-3.5 pr-4"><p className="font-medium text-neutral-200">{product.name}</p>{product.notes && <p className="mt-1 max-w-[280px] truncate text-[10px] text-neutral-500">{product.notes}</p>}</td>
                           <td className="py-3.5 pr-4 text-neutral-400">{product.productType}</td>
                           <td className="py-3.5 pr-4 tabular-nums text-neutral-300">{formatCurrency(product.salesPrice)}</td>
-                          <td className="py-3.5 pr-4 text-neutral-400">{product.variants.filter((variant) => variant.isActive).length}</td>
+                          <td className="py-3.5 pr-4 text-neutral-400">{product.variants.filter((variant) => variant.isActive).map((variant) => `${variant.name} +${formatCurrency(variant.priceExtra)}`).join(', ') || '—'}</td>
                           <td className="py-3.5"><StatusPill value={product.isActive ? 'ACTIVE' : 'INACTIVE'} /></td>
                         </tr>
                       ))}
@@ -104,8 +106,8 @@ export default function AdminPage() {
             <Surface title="Subscription plans">
               {plans.length === 0 ? <p className="text-sm text-neutral-500">No plans found.</p> : (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[620px] text-left text-xs">
-                    <thead className="text-[10px] uppercase tracking-[0.12em] text-neutral-500"><tr><th className="pb-3 font-medium">Plan</th><th className="pb-3 font-medium">Billing cycle</th><th className="pb-3 font-medium">Price</th><th className="pb-3 font-medium">Minimum quantity</th><th className="pb-3 font-medium">Status</th></tr></thead>
+                  <table className="w-full min-w-[760px] text-left text-xs">
+                    <thead className="text-[10px] uppercase tracking-[0.12em] text-neutral-500"><tr><th className="pb-3 font-medium">Plan</th><th className="pb-3 font-medium">Billing cycle</th><th className="pb-3 font-medium">Price</th><th className="pb-3 font-medium">Minimum quantity</th><th className="pb-3 font-medium">Lifecycle controls</th><th className="pb-3 font-medium">Status</th></tr></thead>
                     <tbody className="divide-y divide-white/[0.06]">
                       {plans.map((plan) => (
                         <tr key={plan.id}>
@@ -113,6 +115,12 @@ export default function AdminPage() {
                           <td className="py-3.5 pr-4 text-neutral-400">{plan.billingPeriod}</td>
                           <td className="py-3.5 pr-4 tabular-nums text-neutral-300">{formatCurrency(plan.price)}</td>
                           <td className="py-3.5 pr-4 text-neutral-400">{plan.minQuantity}</td>
+                          <td className="py-3.5 pr-4 text-neutral-400">{[
+                            plan.autoClose && 'auto-close',
+                            plan.canPause && 'pause',
+                            plan.canCloseEarly && 'early close',
+                            plan.canRenew && 'renew',
+                          ].filter(Boolean).join(' · ') || 'fixed term'}</td>
                           <td className="py-3.5"><StatusPill value={plan.isActive ? 'ACTIVE' : 'INACTIVE'} /></td>
                         </tr>
                       ))}
@@ -163,7 +171,7 @@ export default function AdminPage() {
                 )}
               </Surface>
             </div>
-            <p className="px-1 text-[11px] text-neutral-500">Staff management is not exposed by the current backend API.</p>
+            <StaffManagement />
           </div>
         ) : null}
       </WorkspaceShell>
