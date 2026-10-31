@@ -99,6 +99,7 @@ function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
   const links = [
     ['Product', '#product'],
+    ['Twin', '/twin'],
     ['Simulate', '#simulate'],
     ['Compare', '#compare'],
     ['Intelligence', '#intelligence'],
