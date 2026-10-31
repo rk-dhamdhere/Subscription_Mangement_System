@@ -8,7 +8,7 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api/v1');
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Brightloop Subscription Management API')
+    .setTitle('Twin Subscription Management API')
     .setDescription(
       'Authentication, catalog, subscription, billing, and finance APIs.',
     )

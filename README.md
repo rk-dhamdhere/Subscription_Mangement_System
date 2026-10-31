@@ -256,6 +256,14 @@ Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`, a
 
 Set `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` in `backend/.env` using Razorpay test-mode credentials. The key secret and webhook secret must remain backend-only. Set the webhook URL to `https://<your-api-host>/api/v1/payments/razorpay/webhook` and subscribe to the `payment.captured` event. Checkout is disabled until valid credentials are configured.
 
+## Deploy a demo
+
+The root `render.yaml` defines a free Render web service for the NestJS API and a PostgreSQL database in Singapore. In Render, create a Blueprint from this repository and review the free-tier limits before deploying. Free web services can sleep when idle, and free databases are temporary; use paid, backed-up resources for production or persistent demo data.
+
+Set the Blueprint's `FRONTEND_URL` to the deployed Vercel URL. Add Razorpay test credentials in Render's environment settings if online checkout should be enabled. Do not put database or Razorpay secrets in Git or in the Vercel frontend project.
+
+In Vercel, import this repository with `frontend` as the Root Directory and set `BRIGHTLOOP_API_URL` to the Render API URL ending in `/api/v1`. After deployment, update Render's `FRONTEND_URL` to the assigned Vercel domain and redeploy the API.
+
 ## Development and quality checks
 
 Run backend commands from `backend/`:
