@@ -217,16 +217,19 @@ Set `BRIGHTLOOP_DEMO_PASSWORD` in `backend/.env` to a password of at least 12 ch
 npm run db:seed
 ```
 
-The seed creates two Admins, three staff roles, and three customers. All use the configured demo password:
+The seed creates two Admins, four staff accounts across Finance, Sales, and General roles, and three customers. Every seeded account uses the password configured in `BRIGHTLOOP_DEMO_PASSWORD`; the password is not stored in Git.
 
-| Role | Email |
+| Account type | Email |
 |---|---|
 | Admin | `admin@brightloop.example.test` |
 | Admin | `admin2@brightloop.example.test` |
 | Finance staff | `finance@brightloop.example.test` |
-| Sales staff | `sales@brightloop.example.test`, `sales2@brightloop.example.test` |
+| Sales staff | `sales@brightloop.example.test` |
+| Sales staff | `sales2@brightloop.example.test` |
 | General staff | `operations@brightloop.example.test` |
-| Customer | `customer@brightloop.example.test`, `customer2@brightloop.example.test`, `customer3@brightloop.example.test` |
+| Customer | `customer@brightloop.example.test` |
+| Customer | `customer2@brightloop.example.test` |
+| Customer | `customer3@brightloop.example.test` |
 
 The seed is explicit and is not run automatically. Seed passwords must be at least 12 characters; customer signup and password reset require at least 9 characters with uppercase, lowercase, and a special character.
 
