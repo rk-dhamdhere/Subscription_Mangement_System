@@ -6,6 +6,9 @@ export const metadata: Metadata = {
   title: 'Twin — Decision simulator',
   description: 'Simulate the decision before you make it. See how every choice ripples through your business with Twin.',
   generator: 'Twin',
+  other: {
+    'darkreader-lock': 'true',
+  },
   icons: {
     icon: [
       {

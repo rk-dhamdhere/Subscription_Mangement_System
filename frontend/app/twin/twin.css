@@ -1,25 +1,55 @@
+.twin-hero-word {
+  animation: twin-hero-word-in 520ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.twin-kpi-float {
+  animation: twin-kpi-float var(--twin-kpi-duration, 6s) ease-in-out infinite;
+  animation-delay: var(--twin-kpi-delay, 0s);
+  will-change: transform;
+}
+
 .twin-sparkline {
-  stroke-dasharray: none;
-  stroke-dashoffset: 0;
-  opacity: 0;
-  animation: twin-sparkline-draw 1.15s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+  animation: twin-sparkline-draw 1.15s cubic-bezier(0.23, 1, 0.32, 1) both;
 }
 
 .twin-spark-end {
   animation: twin-spark-end-glow 1.8s ease-in-out infinite alternate;
 }
 
-@keyframes twin-sparkline-draw {
-  to { opacity: 1; }
-}
-
-@keyframes twin-spark-end-glow {
+@keyframes twin-hero-word-in {
   from {
-    opacity: 0.55;
+    opacity: 0;
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
+    transform: translateY(0);
   }
+}
+
+@keyframes twin-kpi-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes twin-sparkline-draw {
+  from {
+    opacity: 0.25;
+    stroke-dashoffset: 100;
+  }
+  to {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes twin-spark-end-glow {
+  from { opacity: 0.55; }
+  to { opacity: 1; }
+}
+
+.twin-sparkline {
+  fill: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -30,6 +60,13 @@
 
   .twin-sparkline {
     opacity: 1;
+    stroke-dashoffset: 0;
+  }
+
+  .twin-hero-word,
+  .twin-kpi-float {
+    animation: none;
+    will-change: auto;
   }
 }
 

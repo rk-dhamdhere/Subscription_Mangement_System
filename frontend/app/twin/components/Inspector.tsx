@@ -1,6 +1,7 @@
 'use client'
 
-import { AnimatePresence, motion } from 'framer-motion'
+import { motion } from 'framer-motion'
+import { useEffect, useRef } from 'react'
 
 export type BusinessNodeId =
   | 'Pricing'
@@ -72,10 +73,29 @@ export const inspectorData: Record<BusinessNodeId, InspectorData> = {
 
 type InspectorProps = {
   activeNode: BusinessNodeId
+  reducedMotion: boolean
 }
 
-export default function Inspector({ activeNode }: InspectorProps) {
+export default function Inspector({
+  activeNode,
+  reducedMotion,
+}: InspectorProps) {
   const data = inspectorData[activeNode]
+  const panelRef = useRef<HTMLDivElement>(null)
+  const previousNode = useRef(activeNode)
+
+  useEffect(() => {
+    if (!reducedMotion && previousNode.current !== activeNode) {
+      panelRef.current?.animate(
+        [
+          { opacity: 0.55, transform: 'translateY(4px)' },
+          { opacity: 1, transform: 'translateY(0)' },
+        ],
+        { duration: 150, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' },
+      )
+    }
+    previousNode.current = activeNode
+  }, [activeNode, reducedMotion])
 
   return (
     <aside
@@ -92,15 +112,7 @@ export default function Inspector({ activeNode }: InspectorProps) {
         </span>
       </div>
 
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
-          key={data.id}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
-          transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-          className="mt-7"
-        >
+      <div ref={panelRef} className="mt-7">
           <p className="text-xs text-white/40">Selected node</p>
           <div className="mt-1 flex items-baseline justify-between gap-3">
             <h3 className="text-2xl font-medium tracking-[-0.06em] text-white">
@@ -113,12 +125,11 @@ export default function Inspector({ activeNode }: InspectorProps) {
 
           <div className="mt-4 flex items-end justify-between">
             <div>
-              <p
-                key={`${data.id}-${data.value}`}
+              <InspectorTicker
+                value={data.value}
+                reducedMotion={reducedMotion}
                 className="twin-inspector-value text-[34px] font-medium leading-none tabular-nums tracking-[-0.07em] text-white"
-              >
-                {data.value}
-              </p>
+              />
               <p className="mt-2 text-[11px] text-white/45">{data.descriptor}</p>
             </div>
             <span className="text-[10px] uppercase tracking-[0.12em] text-white/30">
@@ -162,11 +173,11 @@ export default function Inspector({ activeNode }: InspectorProps) {
               {data.effects.map((effect, index) => (
                 <motion.li
                   key={`${data.id}-${effect}`}
-                  initial={{ opacity: 0, x: -6 }}
+                  initial={reducedMotion ? false : { opacity: 0, x: -6 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{
-                    duration: 0.22,
-                    delay: index * 0.055,
+                    duration: reducedMotion ? 0 : 0.22,
+                    delay: reducedMotion ? 0 : index * 0.055,
                     ease: [0.23, 1, 0.32, 1],
                   }}
                   className="flex items-center gap-2 text-xs text-white/65"
@@ -177,8 +188,42 @@ export default function Inspector({ activeNode }: InspectorProps) {
               ))}
             </ul>
           </div>
-        </motion.div>
-      </AnimatePresence>
+      </div>
     </aside>
+  )
+}
+
+function InspectorTicker({
+  value,
+  reducedMotion,
+  className,
+}: {
+  value: string
+  reducedMotion: boolean
+  className: string
+}) {
+  const elementRef = useRef<HTMLSpanElement>(null)
+  const initialValue = useRef(value)
+
+  useEffect(() => {
+    const element = elementRef.current
+    if (!element || initialValue.current === value) return
+
+    element.textContent = value
+    if (!reducedMotion) {
+      element.animate(
+        [
+          { opacity: 0.25, transform: 'translateY(4px)' },
+          { opacity: 1, transform: 'translateY(0)' },
+        ],
+        { duration: 260, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' },
+      )
+    }
+  }, [reducedMotion, value])
+
+  return (
+    <span ref={elementRef} className={className} aria-live="polite">
+      {initialValue.current}
+    </span>
   )
 }

@@ -249,8 +249,9 @@ const MemoizedGraphNode = memo(GraphNode)
 function NodeGraph() {
   const graphRef = useRef<HTMLDivElement>(null)
   const [positions, setPositions] = useState<NodePositions>(initialPositions)
-  const [livePositions, setLivePositions] =
-    useState<NodePositions>(initialPositions)
+  const pathRefs = useRef<
+    Partial<Record<BusinessNodeId, SVGPathElement | null>>
+  >({})
   const [selectedNode, setSelectedNode] = useState<BusinessNodeId>('Cash')
   const [hoveredNode, setHoveredNode] = useState<BusinessNodeId | null>(null)
   const [drawn, setDrawn] = useState(false)
@@ -312,7 +313,7 @@ function NodeGraph() {
 
   const updateLivePosition = useCallback(
     (id: BusinessNodeId, position: Point) => {
-      setLivePositions((current) => ({ ...current, [id]: position }))
+      pathRefs.current[id]?.setAttribute('d', connectionPath(position))
     },
     [],
   )
@@ -321,7 +322,7 @@ function NodeGraph() {
     (id: BusinessNodeId, position: Point) => {
       const finalPosition = clampNodePosition(position)
       setPositions((current) => ({ ...current, [id]: finalPosition }))
-      setLivePositions((current) => ({ ...current, [id]: finalPosition }))
+      pathRefs.current[id]?.setAttribute('d', connectionPath(finalPosition))
     },
     [],
   )
@@ -350,7 +351,7 @@ function NodeGraph() {
         </div>
 
         <div className="grid items-start gap-8 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-10">
-          <Inspector activeNode={activeNode} />
+          <Inspector activeNode={activeNode} reducedMotion={reducedMotion} />
 
           <div className="min-w-0">
             <div
@@ -371,7 +372,7 @@ function NodeGraph() {
                 </defs>
                 <circle cx={HUB.x} cy={HUB.y} r="150" fill="url(#twin-hub-glow)" />
                 {initialNodes.map((node, index) => {
-                  const position = livePositions[node.id]
+                  const position = positions[node.id]
                   const highlighted = activeChain.has(node.id)
                   const path = connectionPath(position)
                   return (
@@ -384,6 +385,9 @@ function NodeGraph() {
                       }
                     >
                       <path
+                        ref={(element) => {
+                          pathRefs.current[node.id] = element
+                        }}
                         id={`twin-edge-${node.id.toLowerCase()}`}
                         d={path}
                         pathLength="1"
@@ -442,7 +446,7 @@ function NodeGraph() {
                     node={node}
                     position={position}
                     graphRef={graphRef}
-                    draggable={mounted && !mobile}
+                    draggable={mounted && !mobile && !reducedMotion}
                     active={active}
                     selected={node.id === selectedNode}
                     dimmed={Boolean(activeNode) && !active}
@@ -456,7 +460,11 @@ function NodeGraph() {
               })}
 
               <p className="absolute bottom-3 left-4 z-20 text-[10px] tracking-[0.02em] text-white/40 sm:bottom-4 sm:left-5">
-                {mobile ? 'Tap any node · select to inspect' : 'Drag any node · hover to trace'}
+                {mobile
+                  ? 'Tap any node · select to inspect'
+                  : reducedMotion
+                    ? 'Select any node · hover to trace'
+                    : 'Drag any node · hover to trace'}
               </p>
             </div>
           </div>

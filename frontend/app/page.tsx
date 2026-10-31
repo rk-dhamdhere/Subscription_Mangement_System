@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
 import {
   Activity,
   ArrowDown,
@@ -14,7 +15,6 @@ import {
   Sparkles,
   ToggleRight,
   X,
-  Zap,
 } from 'lucide-react'
 import {
   motion,
@@ -23,6 +23,7 @@ import {
   useTransform,
   type MotionValue,
 } from 'framer-motion'
+import Footer from '../components/Footer'
 
 type Scenario = 'price' | 'ads' | 'hire'
 type NodeId = 'Pricing' | 'Marketing' | 'Costs' | 'Customers' | 'Revenue' | 'Cash'
@@ -32,27 +33,6 @@ const presets: { label: string; scenario: Scenario }[] = [
   { label: 'Paid ads -30%', scenario: 'ads' },
   { label: 'Hire 10 people', scenario: 'hire' },
 ]
-
-const scenarioMetrics: Record<Scenario, { label: string; value: string }[]> = {
-  price: [
-    { label: 'Conversion', value: '−7%' },
-    { label: 'Revenue', value: '+8.2%' },
-    { label: 'Churn', value: '+0.4pp' },
-    { label: 'Cash', value: '+$420k' },
-  ],
-  ads: [
-    { label: 'Conversion', value: '+3.4%' },
-    { label: 'Revenue', value: '+5.1%' },
-    { label: 'Churn', value: '−0.2pp' },
-    { label: 'Cash', value: '+$280k' },
-  ],
-  hire: [
-    { label: 'Conversion', value: '+2.6%' },
-    { label: 'Revenue', value: '+6.4%' },
-    { label: 'Churn', value: '−0.1pp' },
-    { label: 'Cash', value: '−$180k' },
-  ],
-}
 
 const nodeData: {
   id: NodeId
@@ -86,11 +66,16 @@ const initialPositions = Object.fromEntries(
 
 function Logo() {
   return (
-    <a href="#top" className="flex items-center gap-2.5" aria-label="Twin home">
-      <span className="grid size-8 place-items-center rounded-xl border border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.12)]">
-        <Network className="size-4" />
-      </span>
-      <span className="text-[17px] font-semibold tracking-[-0.06em] text-white">Twin</span>
+    <a href="/" className="flex items-center" aria-label="Twin home">
+      <Image
+        src="/twin-logo.png"
+        alt="TWIN Logo"
+        width={60}
+        height={60}
+        sizes="60px"
+        className="size-[60px] object-cover"
+        priority
+      />
     </a>
   )
 }
@@ -169,75 +154,185 @@ function WaveCanvas({ runId }: { runId: number }) {
     const context = canvas?.getContext('2d')
     if (!canvas || !context) return
 
+    type Dot = {
+      x: number
+      y: number
+      depth: number
+      phase: number
+      glows: boolean
+    }
+
     let frame = 0
     let width = 0
     let height = 0
     let ratio = 1
-    const spacing = 34
+    let dots: Dot[] = []
+    let visible = false
+    let reducedMotion = window.matchMedia(
+      '(prefers-reduced-motion: reduce)',
+    ).matches
+    let lastFrameTime = 0
+    const frameInterval = 1000 / 60
 
-    const resize = () => {
+    const buildGrid = () => {
       const bounds = canvas.getBoundingClientRect()
       ratio = Math.min(window.devicePixelRatio || 1, 2)
       width = bounds.width
       height = bounds.height
-      canvas.width = width * ratio
-      canvas.height = height * ratio
+      canvas.width = Math.round(width * ratio)
+      canvas.height = Math.round(height * ratio)
       context.setTransform(ratio, 0, 0, ratio, 0, 0)
+
+      const mobile = window.matchMedia('(max-width: 767px)').matches
+      const rowCount = mobile ? 20 : 32
+      const horizon = height * 0.12
+      const floorDepth = height - horizon
+      const nextDots: Dot[] = []
+
+      for (let row = 0; row < rowCount; row += 1) {
+        const depth = row / (rowCount - 1)
+        const y = horizon + Math.pow(depth, 1.65) * floorDepth
+        const spacing = (mobile ? 18 : 15) + depth * (mobile ? 10 : 14)
+        const columnCount = Math.ceil(width / spacing) + 1
+        const startX = (width - (columnCount - 1) * spacing) / 2
+
+        for (let column = 0; column < columnCount; column += 1) {
+          nextDots.push({
+            x: startX + column * spacing,
+            y,
+            depth,
+            phase: (column * 0.47 + row * 0.83) % (Math.PI * 2),
+            glows: (column * 7 + row * 13) % 29 === 0,
+          })
+        }
+      }
+
+      dots = nextDots
+      lastFrameTime = 0
+      if (reducedMotion) {
+        draw(performance.now(), true)
+      } else {
+        scheduleFrame()
+      }
     }
 
-    const draw = (time: number) => {
+    const draw = (time: number, staticFrame = false) => {
       context.clearRect(0, 0, width, height)
       const pulseElapsed = time - pulseStartRef.current
       const pulseActive = runIdRef.current > 0 && pulseElapsed < 1800
       const pulseProgress = pulseActive ? pulseElapsed / 1800 : -1
       const pulseX = pulseProgress * width
+      const timeSeconds = time / 1000
 
-      for (let x = 0; x <= width + spacing; x += spacing) {
-        for (let row = 0; row <= height / spacing + 1; row += 1) {
-          const waveY = Math.sin(x * 0.012 + time * 0.0012 + row * 0.36) * 7
-          const y = row * spacing + waveY
-          const distance = Math.abs(x - pulseX)
-          const glow = pulseActive && distance < 95 ? 1 - distance / 95 : 0
-          const wave = (Math.sin(x * 0.018 + row * 0.55 + time * 0.001) + 1) / 2
+      for (const dot of dots) {
+        const wave = Math.sin(
+          dot.x * 0.012 + dot.phase + timeSeconds * 0.62,
+        )
+        const crossWave = Math.cos(
+          dot.x * 0.006 - dot.phase * 0.7 + timeSeconds * 0.42,
+        )
+        const displacement =
+          dot.depth * (wave * 3.2 + crossWave * 1.2)
+        const x = dot.x + dot.depth * wave * 1.5
+        const y = dot.y + displacement
+        const pulseDistance = pulseActive
+          ? Math.abs(dot.x - pulseX)
+          : Number.POSITIVE_INFINITY
+        const pulse = pulseDistance < 90 ? 1 - pulseDistance / 90 : 0
+        const shimmer = reducedMotion
+          ? 0
+          : (Math.sin(dot.phase + timeSeconds * 0.58) + 1) * 0.5
+        const alpha = Math.min(
+          0.62,
+          0.055 + dot.depth * 0.2 + shimmer * (0.035 + dot.depth * 0.08) +
+            pulse * 0.18,
+        )
+        const radius =
+          0.55 + dot.depth * 0.3 + (dot.glows ? 0.2 + pulse * 0.25 : 0)
+
+        if (dot.glows && !reducedMotion) {
           context.beginPath()
-          context.arc(x, y, 0.7 + wave * 0.45 + glow * 1.3, 0, Math.PI * 2)
-          context.fillStyle = `rgba(52, 211, 153, ${0.12 + wave * 0.12 + glow * 0.68})`
-          if (glow > 0.1) {
-            context.shadowBlur = 13
-            context.shadowColor = '#10b981'
-          } else {
-            context.shadowBlur = 0
-          }
+          context.arc(x, y, radius * 2.4, 0, Math.PI * 2)
+          context.fillStyle = `rgba(16, 185, 129, ${alpha * 0.12})`
           context.fill()
         }
-      }
 
-      if (pulseActive) {
         context.beginPath()
-        for (let x = 0; x <= width; x += 8) {
-          const y = height * 0.48 + Math.sin(x * 0.012 + time * 0.0015) * 22
-          if (x === 0) context.moveTo(x, y)
-          else context.lineTo(x, y)
-        }
-        context.strokeStyle = 'rgba(16, 185, 129, 0.16)'
-        context.lineWidth = 1.5
-        context.shadowBlur = 12
-        context.shadowColor = '#10b981'
-        context.stroke()
-        context.shadowBlur = 0
+        context.arc(x, y, radius, 0, Math.PI * 2)
+        context.fillStyle = `rgba(52, 211, 153, ${alpha})`
+        context.fill()
       }
 
-      frame = window.requestAnimationFrame(draw)
+      lastFrameTime = time
+      if (!staticFrame && !reducedMotion && visible && !document.hidden) {
+        frame = window.requestAnimationFrame(renderFrame)
+      }
     }
 
-    resize()
-    frame = window.requestAnimationFrame(draw)
-    const observer = new ResizeObserver(resize)
-    observer.observe(canvas)
+    function renderFrame(time: number) {
+      frame = 0
+      if (!visible || document.hidden) return
+      if (time - lastFrameTime < frameInterval) {
+        scheduleFrame()
+        return
+      }
+      draw(time)
+    }
+
+    function scheduleFrame() {
+      if (visible && !document.hidden && !reducedMotion && !frame) {
+        frame = window.requestAnimationFrame(renderFrame)
+      }
+    }
+
+    const intersectionObserver = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting
+      if (visible) {
+        if (reducedMotion) draw(performance.now(), true)
+        else scheduleFrame()
+      } else if (frame) {
+        window.cancelAnimationFrame(frame)
+        frame = 0
+      }
+    })
+    const resizeObserver = new ResizeObserver(buildGrid)
+    const motionPreference = window.matchMedia(
+      '(prefers-reduced-motion: reduce)',
+    )
+    const onMotionPreferenceChange = (event: MediaQueryListEvent) => {
+      reducedMotion = event.matches
+      if (reducedMotion) {
+        if (frame) window.cancelAnimationFrame(frame)
+        frame = 0
+        draw(performance.now(), true)
+      } else {
+        lastFrameTime = 0
+        scheduleFrame()
+      }
+    }
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        if (frame) window.cancelAnimationFrame(frame)
+        frame = 0
+      } else if (reducedMotion) {
+        draw(performance.now(), true)
+      } else {
+        lastFrameTime = 0
+        scheduleFrame()
+      }
+    }
+
+    resizeObserver.observe(canvas)
+    intersectionObserver.observe(canvas)
+    motionPreference.addEventListener('change', onMotionPreferenceChange)
+    document.addEventListener('visibilitychange', onVisibilityChange)
 
     return () => {
-      window.cancelAnimationFrame(frame)
-      observer.disconnect()
+      if (frame) window.cancelAnimationFrame(frame)
+      intersectionObserver.disconnect()
+      resizeObserver.disconnect()
+      motionPreference.removeEventListener('change', onMotionPreferenceChange)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [])
 
@@ -271,32 +366,6 @@ function TypewriterHeading() {
   )
 }
 
-function MiniGraph({ index, runId }: { index: number; runId: number }) {
-  const paths = [
-    ['M2 25 C16 24 20 9 34 13 S51 21 63 8 S82 14 98 3', 'M2 24 C18 23 23 8 37 12 S53 20 65 7 S84 12 98 2'],
-    ['M2 26 C17 26 19 24 34 20 S54 22 65 12 S82 9 98 3', 'M2 26 C17 24 19 19 34 18 S54 19 65 9 S82 7 98 2'],
-    ['M2 9 C16 11 22 8 35 17 S51 11 65 20 S81 15 98 25', 'M2 6 C17 9 22 8 35 15 S51 9 65 18 S81 12 98 22'],
-    ['M2 24 C18 23 18 19 32 21 S51 9 62 12 S79 15 98 3', 'M2 24 C18 23 18 19 32 21 S51 9 62 12 S79 13 98 2'],
-  ]
-  const [base, pulse] = paths[index]
-
-  return (
-    <svg viewBox="0 0 100 30" className="mt-3 h-8 w-full overflow-visible" aria-hidden="true">
-      <motion.path
-        key={runId}
-        d={runId > 0 ? pulse : base}
-        fill="none"
-        stroke="#34d399"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        initial={{ pathLength: 0.75, opacity: 0.45 }}
-        animate={{ pathLength: 1, opacity: 1 }}
-        transition={{ duration: 0.8, ease: 'easeOut' }}
-      />
-    </svg>
-  )
-}
-
 function SimulatorHero({
   onSimulate,
   runId,
@@ -307,7 +376,6 @@ function SimulatorHero({
   scenario: Scenario
 }) {
   const [prompt, setPrompt] = useState('What if we raise prices by 15%?')
-  const metrics = scenarioMetrics[scenario]
 
   function submit(nextScenario?: Scenario) {
     const selectedScenario = nextScenario ?? (
@@ -408,32 +476,26 @@ function SimulatorHero({
               </motion.circle>
             )}
           </svg>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-5">
-            {metrics.map((metric, index) => (
-              <motion.div
-                key={`${metric.label}-${runId}`}
-                initial={{ opacity: 0, y: 16, scale: 0.97 }}
-                animate={{ opacity: 1, y: [0, runId ? -5 : 0, 0], scale: 1 }}
-                transition={{ duration: 0.48, delay: 0.12 + index * 0.08, y: { duration: 0.55, delay: 0.2 } }}
-                className="relative rounded-[18px] border border-white/[0.09] bg-[#0c0f0d]/95 p-4 shadow-[0_18px_42px_rgba(0,0,0,0.34)] backdrop-blur-xl sm:p-5"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-neutral-500 sm:text-xs">{metric.label}</span>
-                  {index === 0 ? <Activity className="size-3.5 text-emerald-300" /> : index === 1 ? <BarChart3 className="size-3.5 text-emerald-300" /> : <Zap className="size-3.5 text-emerald-300" />}
-                </div>
-                <p className="mt-4 whitespace-nowrap text-xl font-medium tracking-[-0.045em] text-white sm:text-[25px]">{metric.value}</p>
-                <MiniGraph index={index} runId={runId} />
-                <motion.span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute -inset-px rounded-[18px] border border-emerald-300/35"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={runId > 0 ? { opacity: [0, 0.75, 0], scale: [0.98, 1.08, 1.14] } : { opacity: 0 }}
-                  transition={{ duration: 0.9, delay: index * 0.11 }}
-                />
-              </motion.div>
-            ))}
+          <div
+            className="relative h-[210px] w-full sm:h-[230px]"
+          >
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+              className="absolute inset-0 grid place-items-center"
+            >
+              <Image
+                src="/twin-logo-emerald.png"
+                alt="TWIN Logo"
+                width={520}
+                height={517}
+                sizes="(max-width: 640px) 104px, (max-width: 768px) 128px, 146px"
+                className="h-auto w-[104px] drop-shadow-[0_0_16px_rgba(34,197,94,0.2)] sm:w-32 md:w-[146px]"
+                loading="eager"
+              />
+            </motion.div>
           </div>
-          <p className="mt-4 text-center text-[10px] uppercase tracking-[0.18em] text-neutral-600">Live model · 14-month forecast</p>
         </div>
 
         <div className="mt-[72px] grid items-end gap-8 border-t border-white/[0.07] pt-9 sm:mt-[95px] sm:grid-cols-[1fr_auto] sm:pt-12">
@@ -862,15 +924,7 @@ export default function Page() {
       <SimulatorHero onSimulate={simulate} runId={simulationRun} scenario={scenario} />
       <DataGlowSection />
       <NetworkModel selected={selectedNode} setSelected={setSelectedNode} />
-      <footer className="border-t border-white/[0.06] bg-[#070807] px-5 py-8 sm:px-8">
-        <div className="mx-auto flex max-w-[1120px] flex-col items-center justify-between gap-4 sm:flex-row">
-          <Logo />
-          <p className="text-[10px] text-neutral-600">See what&apos;s next with Twin.</p>
-          <a href="#top" className="inline-flex items-center gap-1.5 text-[10px] text-neutral-500 transition hover:text-emerald-300">
-            Back to top <ArrowUpRight className="size-3" />
-          </a>
-        </div>
-      </footer>
+      <Footer />
     </main>
   )
 }

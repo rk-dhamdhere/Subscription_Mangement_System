@@ -1,7 +1,6 @@
 'use client'
 
-import { memo, useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
+import { memo, useEffect, useRef, type CSSProperties } from 'react'
 
 type KpiCardProps = {
   label: string
@@ -16,88 +15,59 @@ const lineVariants = [
   'M2 22 C16 27 16 20 29 23 S43 17 53 20 S68 12 79 15 S100 7 118 5',
 ]
 
-function KpiCard({
-  label,
-  value,
-  index,
-  runId,
-}: KpiCardProps) {
-  const cardRef = useRef<HTMLDivElement>(null)
-  const [mounted, setMounted] = useState(false)
-  const [reducedMotion, setReducedMotion] = useState(false)
-  const [inView, setInView] = useState(false)
+const valueRuns = [
+  ['−6.8%', '+8.4%', '+0.3pp', '+$436k'],
+  ['−7.2%', '+8.1%', '+0.5pp', '+$408k'],
+  ['−7%', '+8.2%', '+0.4pp', '+$420k'],
+]
+
+function KpiCard({ label, value, index, runId }: KpiCardProps) {
   const valueRef = useRef<HTMLSpanElement>(null)
   const line = lineVariants[(index + runId) % lineVariants.length]
-  const duration = 5 + (index % 3)
-
-  useEffect(() => {
-    const preference = window.matchMedia('(prefers-reduced-motion: reduce)')
-    setReducedMotion(preference.matches)
-    setMounted(true)
-
-    const updatePreference = (event: MediaQueryListEvent) => {
-      setReducedMotion(event.matches)
-    }
-
-    preference.addEventListener('change', updatePreference)
-    return () => preference.removeEventListener('change', updatePreference)
-  }, [])
-
-  useEffect(() => {
-    const element = cardRef.current
-    if (!element) return
-    const observer = new IntersectionObserver(
-      ([entry]) => setInView(entry.isIntersecting),
-      { threshold: 0.05 },
-    )
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [])
+  const endY = line.includes('118 3') ? '3' : line.includes('118 2') ? '2' : '5'
 
   useEffect(() => {
     const element = valueRef.current
-    if (!element || runId === 0 || !mounted || reducedMotion) return
-    element.animate(
-      [
-        { opacity: 0.25, transform: 'translateY(5px)' },
-        { opacity: 1, transform: 'translateY(0)' },
-      ],
-      { duration: 300, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' },
-    )
-  }, [mounted, reducedMotion, runId, value])
+    if (!element || runId === 0) return
+
+    const reducedMotion = window.matchMedia(
+      '(prefers-reduced-motion: reduce)',
+    ).matches
+    const nextValue = valueRuns[(runId - 1) % valueRuns.length][index]
+    element.textContent = nextValue
+    if (!reducedMotion) {
+      element.animate(
+        [
+          { opacity: 0.25, transform: 'translateY(5px)' },
+          { opacity: 1, transform: 'translateY(0)' },
+        ],
+        { duration: 300, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' },
+      )
+    }
+  }, [index, runId])
 
   return (
-    <motion.div
-      ref={cardRef}
-      className="flex flex-col items-center"
-      animate={
-        mounted && inView && !reducedMotion
-          ? { y: [0, -4, 0, 4, 0] }
-          : undefined
-      }
-      transition={
-        !mounted || !inView || reducedMotion
-          ? undefined
-          : {
-              duration,
-              delay: index * 0.4,
-              repeat: Infinity,
-              ease: 'easeInOut',
-            }
+    <div
+      className="twin-kpi-float flex min-w-0 flex-col items-center"
+      style={
+        {
+          '--twin-kpi-duration': `${5 + (index % 3)}s`,
+          '--twin-kpi-delay': `${index * -0.75}s`,
+        } as CSSProperties
       }
     >
-      <div className="w-full rounded-xl border border-white/[0.11] bg-[#101412]/90 px-3 py-3 shadow-[0_12px_38px_rgba(0,0,0,0.28)] backdrop-blur-md sm:min-w-[155px] sm:px-4">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] font-medium tracking-[0.08em] text-white/50 sm:text-[11px]">
+      <div className="w-full rounded-xl border border-white/[0.11] bg-[#101412]/90 px-2 py-2.5 shadow-[0_12px_38px_rgba(0,0,0,0.28)] backdrop-blur-md sm:px-4 sm:py-3">
+        <div className="flex items-center justify-between gap-1">
+          <span className="truncate text-[9px] font-medium tracking-[0.04em] text-white/50 sm:text-[11px] sm:tracking-[0.08em]">
             {label}
           </span>
-          <span className="size-1.5 rounded-full bg-[#22C55E] shadow-[0_0_10px_rgba(34,197,94,0.85)]" />
+          <span className="size-1.5 shrink-0 rounded-full bg-[#22C55E]" />
         </div>
-        <div className="mt-1 flex items-end justify-between gap-2">
+        <div className="mt-1 flex min-w-0 items-end justify-between gap-1">
           <span
             ref={valueRef}
             aria-live="polite"
-            className="text-lg font-medium tabular-nums tracking-[-0.045em] text-white sm:text-xl"
+            className="whitespace-nowrap text-sm font-medium tabular-nums tracking-[-0.045em] text-white sm:text-xl"
           >
             {value}
           </span>
@@ -106,29 +76,39 @@ function KpiCard({
             viewBox="0 0 120 36"
             fill="none"
             aria-hidden="true"
-            className="mb-0.5 h-7 w-[58px] overflow-visible sm:w-[68px]"
+            className="twin-kpi-spark mb-0.5 hidden h-7 w-[58px] shrink-0 overflow-visible sm:block sm:w-[68px]"
           >
             <path
               d={line}
               pathLength="100"
+              strokeDasharray="100"
+              strokeDashoffset="100"
               stroke="#22C55E"
               strokeWidth="1.7"
               strokeLinecap="round"
-                className={mounted && !reducedMotion ? 'twin-sparkline' : ''}
+              className="twin-sparkline"
             />
             <circle
               cx="117"
-              cy={line.includes('118 3') ? '3' : line.includes('118 2') ? '2' : '5'}
+              cy={endY}
+              r="4.5"
+              fill="#22C55E"
+              opacity=".18"
+              aria-hidden="true"
+            />
+            <circle
+              cx="117"
+              cy={endY}
               r="2.2"
               fill="#86EFAC"
-              className={mounted && !reducedMotion ? 'twin-spark-end' : ''}
+              className="twin-spark-end"
             />
           </svg>
         </div>
       </div>
-      <span className="h-10 w-px bg-gradient-to-b from-white/20 to-[#22C55E]/75 sm:h-16" />
-      <span className="size-1.5 rounded-full bg-[#22C55E] shadow-[0_0_12px_rgba(34,197,94,0.95)]" />
-    </motion.div>
+      <span className="h-7 w-px bg-gradient-to-b from-white/20 to-[#22C55E]/75 sm:h-16" />
+      <span className="size-1.5 rounded-full bg-[#22C55E]" />
+    </div>
   )
 }
 
