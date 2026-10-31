@@ -1,81 +1,875 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
-import { ArrowRight, BrainCircuit, Check, CircleDollarSign, Database, LineChart, Menu, Network, Play, Sparkles, TrendingUp, X, Zap } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import {
+  Activity,
+  ArrowDown,
+  ArrowRight,
+  ArrowUpRight,
+  BarChart3,
+  Check,
+  Menu,
+  MousePointer2,
+  Network,
+  Sparkles,
+  ToggleRight,
+  X,
+  Zap,
+} from 'lucide-react'
+import {
+  motion,
+  useMotionValue,
+  useScroll,
+  useTransform,
+  type MotionValue,
+} from 'framer-motion'
 
-const integrations = [
-  { name: 'PostgreSQL', mark: 'P', tone: 'bg-sky-500/15 text-sky-300' },
-  { name: 'Stripe', mark: 'S', tone: 'bg-violet-500/15 text-violet-300' },
-  { name: 'QuickBooks', mark: 'Q', tone: 'bg-emerald-500/15 text-emerald-300' },
-  { name: 'Bank feeds', mark: 'B', tone: 'bg-orange-500/15 text-orange-300' },
-  { name: 'Tax rules', mark: '%', tone: 'bg-amber-500/15 text-amber-300' },
+type Scenario = 'price' | 'ads' | 'hire'
+type NodeId = 'Pricing' | 'Marketing' | 'Costs' | 'Customers' | 'Revenue' | 'Cash'
+
+const presets: { label: string; scenario: Scenario }[] = [
+  { label: 'Price +8%', scenario: 'price' },
+  { label: 'Paid ads -30%', scenario: 'ads' },
+  { label: 'Hire 10 people', scenario: 'hire' },
 ]
 
-const scenarios = [
-  { label: 'Scenario A', title: 'Monthly growth plan', risk: 'Lower risk', impact: '+8.2%', tone: 'muted' },
-  { label: 'Scenario B', title: 'Annual enterprise contract', risk: 'Balanced', impact: '+12.4%', tone: 'featured' },
-  { label: 'Scenario C', title: 'Add-on bundle promotion', risk: 'Controlled', impact: '+6.8%', tone: 'muted' },
+const scenarioMetrics: Record<Scenario, { label: string; value: string }[]> = {
+  price: [
+    { label: 'Conversion', value: '−7%' },
+    { label: 'Revenue', value: '+8.2%' },
+    { label: 'Churn', value: '+0.4pp' },
+    { label: 'Cash', value: '+$420k' },
+  ],
+  ads: [
+    { label: 'Conversion', value: '+3.4%' },
+    { label: 'Revenue', value: '+5.1%' },
+    { label: 'Churn', value: '−0.2pp' },
+    { label: 'Cash', value: '+$280k' },
+  ],
+  hire: [
+    { label: 'Conversion', value: '+2.6%' },
+    { label: 'Revenue', value: '+6.4%' },
+    { label: 'Churn', value: '−0.1pp' },
+    { label: 'Cash', value: '−$180k' },
+  ],
+}
+
+const nodeData: {
+  id: NodeId
+  x: number
+  y: number
+  value: string
+  descriptor: string
+  delta: string
+  trace: string
+}[] = [
+  { id: 'Pricing', x: 19, y: 25, value: '$99', descriptor: 'ARPA / mo', delta: '+2%', trace: '−7% conversion' },
+  { id: 'Marketing', x: 81, y: 25, value: '$184', descriptor: 'paid CAC', delta: '−30% spend', trace: '+3.4% customers' },
+  { id: 'Costs', x: 17, y: 66, value: '36%', descriptor: 'COGS', delta: '−1.2pp', trace: '36% of revenue' },
+  { id: 'Customers', x: 83, y: 65, value: '4,820', descriptor: 'active', delta: '+3.4%', trace: '+3.4% customers' },
+  { id: 'Revenue', x: 34, y: 87, value: '$8.4M', descriptor: 'ARR', delta: '+8.2%', trace: '+8.2% revenue' },
+  { id: 'Cash', x: 70, y: 87, value: '$1.9M', descriptor: '14 mo runway', delta: '+$280k', trace: '+$280k cash' },
 ]
+
+const inspectorEffects: Record<NodeId, string[]> = {
+  Cash: ['Pricing $99', 'Marketing $184', 'Costs 36%'],
+  Pricing: ['Conversion −7%', 'Revenue +8.2%', 'Cash - 12 mo +$420k'],
+  Marketing: ['Customers +3.4%', 'Revenue +5.1%', 'Cash +$280k'],
+  Costs: ['COGS 36%', 'Gross margin +1.2pp', 'Cash +$96k'],
+  Customers: ['Conversion +3.4%', 'Churn +0.4pp', 'Revenue +8.2%'],
+  Revenue: ['Pricing +8%', 'Customers +3.4%', 'Cash +$420k'],
+}
+
+const initialPositions = Object.fromEntries(
+  nodeData.map(({ id, x, y }) => [id, { x, y }]),
+) as Record<NodeId, { x: number; y: number }>
 
 function Logo() {
-  return <a href="#top" className="flex items-center gap-2.5" aria-label="Brightloop home"><span className="grid size-8 place-items-center rounded-lg border border-emerald-400/30 bg-emerald-400/10 text-emerald-300 shadow-[0_0_18px_rgba(16,185,129,0.18)]"><Network className="size-4" /></span><span className="text-[15px] font-semibold tracking-[-0.02em] text-white">brightloop</span></a>
+  return (
+    <a href="#top" className="flex items-center gap-2.5" aria-label="Twin home">
+      <span className="grid size-8 place-items-center rounded-xl border border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.12)]">
+        <Network className="size-4" />
+      </span>
+      <span className="text-[17px] font-semibold tracking-[-0.06em] text-white">Twin</span>
+    </a>
+  )
 }
 
-function SectionHeading({ eyebrow, title, body }: { eyebrow: string; title: string; body: string }) {
-  return <div className="mx-auto max-w-2xl text-center"><p className="mb-4 text-[11px] font-medium uppercase tracking-[0.24em] text-emerald-300/80">{eyebrow}</p><h2 className="text-balance text-3xl font-semibold tracking-[-0.04em] text-white sm:text-5xl">{title}</h2><p className="mx-auto mt-5 max-w-xl text-pretty text-sm leading-7 text-neutral-400 sm:text-base">{body}</p></div>
+function Header() {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const links = [
+    ['Product', '#product'],
+    ['Simulate', '#simulate'],
+    ['Compare', '#compare'],
+    ['Intelligence', '#intelligence'],
+    ['Memory', '#memory'],
+  ]
+
+  return (
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.06] bg-[#080908]/85 backdrop-blur-xl">
+      <div className="mx-auto flex h-[68px] max-w-[1440px] items-center justify-between px-5 sm:px-8 lg:px-12">
+        <Logo />
+        <nav className="hidden items-center gap-8 md:flex" aria-label="Main navigation">
+          {links.map(([label, href]) => (
+            <a key={label} href={href} className="text-[12px] text-neutral-400 transition-colors hover:text-white">
+              {label}
+            </a>
+          ))}
+        </nav>
+        <div className="hidden items-center gap-5 md:flex">
+          <a href="#memory" className="text-[12px] text-neutral-400 transition-colors hover:text-white">Log in</a>
+          <a href="#simulate" className="inline-flex h-9 items-center gap-2 rounded-full bg-emerald-400 px-4 text-[12px] font-semibold text-[#07120d] transition hover:bg-emerald-300">
+            Get started <ArrowRight className="size-3.5" />
+          </a>
+        </div>
+        <button
+          type="button"
+          className="grid size-10 place-items-center rounded-full border border-white/10 text-neutral-200 md:hidden"
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          {menuOpen ? <X className="size-4" /> : <Menu className="size-4" />}
+        </button>
+      </div>
+      {menuOpen && (
+        <nav className="border-t border-white/[0.06] bg-[#080908] px-5 py-5 md:hidden" aria-label="Mobile navigation">
+          <div className="mx-auto flex max-w-[1440px] flex-col gap-5">
+            {links.map(([label, href]) => (
+              <a key={label} href={href} onClick={() => setMenuOpen(false)} className="text-sm text-neutral-300">
+                {label}
+              </a>
+            ))}
+            <div className="flex items-center gap-5 border-t border-white/10 pt-4">
+              <a href="#memory" onClick={() => setMenuOpen(false)} className="text-sm text-neutral-400">Log in</a>
+              <a href="#simulate" onClick={() => setMenuOpen(false)} className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-2 text-sm font-medium text-[#07120d]">
+                Get started <ArrowRight className="size-4" />
+              </a>
+            </div>
+          </div>
+        </nav>
+      )}
+    </header>
+  )
 }
 
-function MetricCard({ label, value, delta, icon: Icon }: { label: string; value: string; delta: string; icon: typeof TrendingUp }) {
-  return <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4 shadow-[0_0_30px_rgba(16,185,129,0.05)]"><div className="flex items-center justify-between text-neutral-500"><span className="text-[11px] uppercase tracking-[0.16em]">{label}</span><Icon className="size-4 text-emerald-400" /></div><div className="mt-5 flex items-end justify-between gap-2"><span className="text-2xl font-medium tracking-[-0.04em] text-white">{value}</span><span className="text-xs font-medium text-emerald-400">{delta}</span></div></div>
-}
+function WaveCanvas({ runId }: { runId: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const runIdRef = useRef(runId)
+  const pulseStartRef = useRef(0)
 
-const networkNodes = [
-  { id: 'Pricing', x: 18, y: 27, value: '$49 avg. plan', detail: '3 active tiers', color: '#8b5cf6' },
-  { id: 'Marketing', x: 78, y: 24, value: '2,418 leads', detail: '+18.6% pipeline', color: '#f59e0b' },
-  { id: 'Costs', x: 12, y: 68, value: '$128k / mo', detail: '84% covered', color: '#fb7185' },
-  { id: 'Customers', x: 79, y: 68, value: '4,757 active', detail: '+6.2% this month', color: '#34d399' },
-  { id: 'Revenue', x: 32, y: 88, value: '$238.4k MRR', detail: '+12.4% growth', color: '#22d3ee' },
-  { id: 'Cash', x: 68, y: 88, value: '$1.42m runway', detail: '9.4 months', color: '#a78bfa' },
-]
+  useEffect(() => {
+    runIdRef.current = runId
+    pulseStartRef.current = performance.now()
+  }, [runId])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const context = canvas?.getContext('2d')
+    if (!canvas || !context) return
+
+    let frame = 0
+    let width = 0
+    let height = 0
+    let ratio = 1
+    const spacing = 34
+
+    const resize = () => {
+      const bounds = canvas.getBoundingClientRect()
+      ratio = Math.min(window.devicePixelRatio || 1, 2)
+      width = bounds.width
+      height = bounds.height
+      canvas.width = width * ratio
+      canvas.height = height * ratio
+      context.setTransform(ratio, 0, 0, ratio, 0, 0)
+    }
+
+    const draw = (time: number) => {
+      context.clearRect(0, 0, width, height)
+      const pulseElapsed = time - pulseStartRef.current
+      const pulseActive = runIdRef.current > 0 && pulseElapsed < 1800
+      const pulseProgress = pulseActive ? pulseElapsed / 1800 : -1
+      const pulseX = pulseProgress * width
+
+      for (let x = 0; x <= width + spacing; x += spacing) {
+        for (let row = 0; row <= height / spacing + 1; row += 1) {
+          const waveY = Math.sin(x * 0.012 + time * 0.0012 + row * 0.36) * 7
+          const y = row * spacing + waveY
+          const distance = Math.abs(x - pulseX)
+          const glow = pulseActive && distance < 95 ? 1 - distance / 95 : 0
+          const wave = (Math.sin(x * 0.018 + row * 0.55 + time * 0.001) + 1) / 2
+          context.beginPath()
+          context.arc(x, y, 0.7 + wave * 0.45 + glow * 1.3, 0, Math.PI * 2)
+          context.fillStyle = `rgba(52, 211, 153, ${0.12 + wave * 0.12 + glow * 0.68})`
+          if (glow > 0.1) {
+            context.shadowBlur = 13
+            context.shadowColor = '#10b981'
+          } else {
+            context.shadowBlur = 0
+          }
+          context.fill()
+        }
+      }
+
+      if (pulseActive) {
+        context.beginPath()
+        for (let x = 0; x <= width; x += 8) {
+          const y = height * 0.48 + Math.sin(x * 0.012 + time * 0.0015) * 22
+          if (x === 0) context.moveTo(x, y)
+          else context.lineTo(x, y)
+        }
+        context.strokeStyle = 'rgba(16, 185, 129, 0.16)'
+        context.lineWidth = 1.5
+        context.shadowBlur = 12
+        context.shadowColor = '#10b981'
+        context.stroke()
+        context.shadowBlur = 0
+      }
+
+      frame = window.requestAnimationFrame(draw)
+    }
+
+    resize()
+    frame = window.requestAnimationFrame(draw)
+    const observer = new ResizeObserver(resize)
+    observer.observe(canvas)
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      observer.disconnect()
+    }
+  }, [])
+
+  return <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 size-full" aria-hidden="true" />
+}
 
 function TypewriterHeading() {
-  const lines = [
-    { text: 'Your entire business. One connected model.', className: 'text-white' },
+  const title = 'Simulate the decision before you make it.'
+
+  return (
+    <motion.h1
+      aria-label={title}
+      initial="hidden"
+      animate="visible"
+      variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.025, delayChildren: 0.2 } } }}
+      className="mx-auto max-w-[850px] text-balance text-[42px] font-medium leading-[1.03] tracking-[-0.065em] text-white sm:text-[64px] lg:text-[78px]"
+    >
+      {Array.from(title).map((character, index) => (
+        <motion.span
+          aria-hidden="true"
+          key={`${character}-${index}`}
+          variants={{
+            hidden: { opacity: 0, y: 12, filter: 'blur(5px)' },
+            visible: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { duration: 0.28 } },
+          }}
+        >
+          {character === ' ' ? '\u00a0' : character}
+        </motion.span>
+      ))}
+    </motion.h1>
+  )
+}
+
+function MiniGraph({ index, runId }: { index: number; runId: number }) {
+  const paths = [
+    ['M2 25 C16 24 20 9 34 13 S51 21 63 8 S82 14 98 3', 'M2 24 C18 23 23 8 37 12 S53 20 65 7 S84 12 98 2'],
+    ['M2 26 C17 26 19 24 34 20 S54 22 65 12 S82 9 98 3', 'M2 26 C17 24 19 19 34 18 S54 19 65 9 S82 7 98 2'],
+    ['M2 9 C16 11 22 8 35 17 S51 11 65 20 S81 15 98 25', 'M2 6 C17 9 22 8 35 15 S51 9 65 18 S81 12 98 22'],
+    ['M2 24 C18 23 18 19 32 21 S51 9 62 12 S79 15 98 3', 'M2 24 C18 23 18 19 32 21 S51 9 62 12 S79 13 98 2'],
   ]
-  return <motion.h1 initial="hidden" animate="visible" variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.028, delayChildren: 0.12 } } }} className="mx-auto max-w-4xl text-balance text-5xl font-semibold leading-[0.98] tracking-[-0.065em] text-white sm:text-7xl lg:text-[88px]">
-    {lines.map((line) => <span key={line.text} className={`block ${line.className}`}>{Array.from(line.text).map((character, index) => <motion.span key={`${character}-${index}`} variants={{ hidden: { opacity: 0, y: 18, filter: 'blur(6px)' }, visible: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { type: 'spring', stiffness: 260, damping: 22 } } }}>{character === ' ' ? ' ' : character}</motion.span>)}</span>)}
-  </motion.h1>
+  const [base, pulse] = paths[index]
+
+  return (
+    <svg viewBox="0 0 100 30" className="mt-3 h-8 w-full overflow-visible" aria-hidden="true">
+      <motion.path
+        key={runId}
+        d={runId > 0 ? pulse : base}
+        fill="none"
+        stroke="#34d399"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        initial={{ pathLength: 0.75, opacity: 0.45 }}
+        animate={{ pathLength: 1, opacity: 1 }}
+        transition={{ duration: 0.8, ease: 'easeOut' }}
+      />
+    </svg>
+  )
 }
 
-function Sparkline() {
-  return <svg viewBox="0 0 220 54" className="h-14 w-full" role="img" aria-label="Customers trend rising"><defs><linearGradient id="spark-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#34d399" stopOpacity=".28" /><stop offset="1" stopColor="#34d399" stopOpacity="0" /></linearGradient></defs><path d="M0 43 C20 43 25 33 42 35 S66 27 80 30 S102 17 119 23 S142 25 155 17 S177 20 190 9 S210 13 220 2 V54 H0Z" fill="url(#spark-fill)" /><path d="M0 43 C20 43 25 33 42 35 S66 27 80 30 S102 17 119 23 S142 25 155 17 S177 20 190 9 S210 13 220 2" fill="none" stroke="#34d399" strokeWidth="2" /></svg>
+function SimulatorHero({
+  onSimulate,
+  runId,
+  scenario,
+}: {
+  onSimulate: (nextScenario: Scenario) => void
+  runId: number
+  scenario: Scenario
+}) {
+  const [prompt, setPrompt] = useState('What if we raise prices by 15%?')
+  const metrics = scenarioMetrics[scenario]
+
+  function submit(nextScenario?: Scenario) {
+    const selectedScenario = nextScenario ?? (
+      /ads|marketing|spend/i.test(prompt) ? 'ads' : /hire|headcount|people/i.test(prompt) ? 'hire' : 'price'
+    )
+    const nextPrompt = nextScenario
+      ? presets.find((preset) => preset.scenario === nextScenario)?.label ?? prompt
+      : prompt
+    setPrompt(nextPrompt)
+    onSimulate(selectedScenario)
+  }
+
+  return (
+    <section id="product" className="relative overflow-hidden px-5 pb-10 pt-[116px] sm:px-8 sm:pt-[136px]">
+      <div className="pointer-events-none absolute inset-x-0 top-[220px] h-[490px] overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_45%,rgba(16,185,129,0.12),transparent_58%)]" />
+        <WaveCanvas runId={runId} />
+        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-[#070807]" />
+      </div>
+      <div className="relative z-10 mx-auto max-w-[1060px]">
+        <div id="simulate" className="scroll-mt-24 text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="mb-5 flex flex-wrap items-center justify-center gap-2"
+          >
+            {presets.map(({ label, scenario: presetScenario }) => (
+              <button
+                type="button"
+                key={label}
+                onClick={() => submit(presetScenario)}
+                className={`rounded-full border px-3.5 py-1.5 text-[11px] transition ${
+                  scenario === presetScenario && runId > 0
+                    ? 'border-emerald-300/35 bg-emerald-300/[0.09] text-emerald-200'
+                    : 'border-white/[0.09] bg-white/[0.025] text-neutral-400 hover:border-white/20 hover:text-white'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </motion.div>
+          <motion.form
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.65, delay: 0.08 }}
+            onSubmit={(event) => {
+              event.preventDefault()
+              submit()
+            }}
+            className="mx-auto flex min-h-[66px] max-w-[720px] items-center gap-3 rounded-[20px] border border-white/[0.12] bg-[#101210]/90 p-2 pl-5 shadow-[0_16px_80px_rgba(0,0,0,0.38),0_0_50px_rgba(16,185,129,0.06)] backdrop-blur-xl sm:min-h-[74px] sm:pl-6"
+          >
+            <Sparkles className="hidden size-4 shrink-0 text-emerald-300/75 sm:block" />
+            <input
+              aria-label="Describe a business decision to simulate"
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              className="min-w-0 flex-1 bg-transparent text-left text-[13px] text-neutral-200 outline-none placeholder:text-neutral-600 sm:text-sm"
+              placeholder="What decision are you considering?"
+            />
+            <button type="submit" className="inline-flex h-11 shrink-0 items-center gap-2 rounded-[13px] bg-emerald-400 px-4 text-xs font-semibold text-[#06110b] shadow-[0_0_28px_rgba(16,185,129,0.17)] transition hover:bg-emerald-300 sm:px-5">
+              Simulate <ArrowRight className="size-3.5" />
+            </button>
+          </motion.form>
+        </div>
+
+        <div className="relative mx-auto mt-12 max-w-[960px] sm:mt-[72px]">
+          <svg viewBox="0 0 1000 130" preserveAspectRatio="none" className="pointer-events-none absolute left-0 top-7 hidden h-[115px] w-full md:block" aria-hidden="true">
+            <defs>
+              <linearGradient id="hero-path" x1="0" x2="1">
+                <stop offset="0" stopColor="#10b981" stopOpacity=".12" />
+                <stop offset=".5" stopColor="#10b981" stopOpacity=".6" />
+                <stop offset="1" stopColor="#10b981" stopOpacity=".12" />
+              </linearGradient>
+              <filter id="pulse-glow" x="-100%" y="-100%" width="300%" height="300%">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+              </filter>
+            </defs>
+            <motion.path
+              d="M125 54 C210 54 210 88 375 69 S565 39 625 57 S800 87 875 54"
+              fill="none"
+              stroke="url(#hero-path)"
+              strokeWidth="1.3"
+              strokeDasharray="3 7"
+              animate={{ strokeDashoffset: runId % 2 ? -40 : 0 }}
+              transition={{ duration: 1.1 }}
+            />
+            {runId > 0 && (
+              <motion.circle
+                r="4"
+                fill="#6ee7b7"
+                filter="url(#pulse-glow)"
+                initial={{ cx: 80, cy: 55, opacity: 0 }}
+                animate={{ cx: 920, cy: 55, opacity: [0, 1, 1, 0] }}
+                transition={{ duration: 1.5, ease: 'easeInOut' }}
+              >
+              </motion.circle>
+            )}
+          </svg>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-5">
+            {metrics.map((metric, index) => (
+              <motion.div
+                key={`${metric.label}-${runId}`}
+                initial={{ opacity: 0, y: 16, scale: 0.97 }}
+                animate={{ opacity: 1, y: [0, runId ? -5 : 0, 0], scale: 1 }}
+                transition={{ duration: 0.48, delay: 0.12 + index * 0.08, y: { duration: 0.55, delay: 0.2 } }}
+                className="relative rounded-[18px] border border-white/[0.09] bg-[#0c0f0d]/95 p-4 shadow-[0_18px_42px_rgba(0,0,0,0.34)] backdrop-blur-xl sm:p-5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-neutral-500 sm:text-xs">{metric.label}</span>
+                  {index === 0 ? <Activity className="size-3.5 text-emerald-300" /> : index === 1 ? <BarChart3 className="size-3.5 text-emerald-300" /> : <Zap className="size-3.5 text-emerald-300" />}
+                </div>
+                <p className="mt-4 whitespace-nowrap text-xl font-medium tracking-[-0.045em] text-white sm:text-[25px]">{metric.value}</p>
+                <MiniGraph index={index} runId={runId} />
+                <motion.span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -inset-px rounded-[18px] border border-emerald-300/35"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={runId > 0 ? { opacity: [0, 0.75, 0], scale: [0.98, 1.08, 1.14] } : { opacity: 0 }}
+                  transition={{ duration: 0.9, delay: index * 0.11 }}
+                />
+              </motion.div>
+            ))}
+          </div>
+          <p className="mt-4 text-center text-[10px] uppercase tracking-[0.18em] text-neutral-600">Live model · 14-month forecast</p>
+        </div>
+
+        <div className="mt-[72px] grid items-end gap-8 border-t border-white/[0.07] pt-9 sm:mt-[95px] sm:grid-cols-[1fr_auto] sm:pt-12">
+          <div>
+            <p className="mb-4 text-[10px] font-medium uppercase tracking-[0.24em] text-emerald-300/80">DECISION SIMULATOR</p>
+            <TypewriterHeading />
+            <div className="mt-7 flex flex-wrap justify-center gap-3 sm:justify-start">
+              <a href="#memory" className="inline-flex h-11 items-center gap-2 rounded-full bg-emerald-400 px-5 text-xs font-semibold text-[#07120d] transition hover:bg-emerald-300">
+                Build your Business Twin <ArrowRight className="size-3.5" />
+              </a>
+              <a href="#compare" className="inline-flex h-11 items-center gap-2 rounded-full border border-white/[0.12] bg-white/[0.025] px-5 text-xs font-medium text-neutral-200 transition hover:border-white/25 hover:bg-white/[0.05]">
+                See how it works <ArrowDown className="size-3.5" />
+              </a>
+            </div>
+          </div>
+          <p className="max-w-[260px] pb-1 text-[12px] leading-6 text-neutral-500 sm:text-right">
+            See how every decision ripples through your business — before it touches reality.
+          </p>
+        </div>
+      </div>
+    </section>
+  )
 }
 
-function NetworkModel() {
-  const [selected, setSelected] = useState('Customers')
-  const [drag, setDrag] = useState({ x: 0, y: 0 })
-  const active = networkNodes.find((node) => node.id === selected) ?? networkNodes[3]
-  const links = networkNodes.map((node) => `M 50 50 Q ${(node.x + 50) / 2} ${(node.y + 50) / 2 - 8} ${node.x} ${node.y}`)
+const integrations = [
+  { name: 'Mixpanel', value: '3.78%', left: '14%', top: '31%', icon: BarChart3 },
+  { name: 'Stripe', value: '$708k', left: '83%', top: '30%', icon: Activity },
+  { name: 'HubSpot', value: '$2.50M', left: '22%', top: '69%', icon: Network },
+  { name: 'QuickBooks', value: '$1.86M', left: '76%', top: '72%', icon: Check },
+  { name: 'Meta Ads', value: '$183', left: '50%', top: '18%', icon: ArrowUpRight },
+]
 
-  return <section id="network" className="relative z-10 border-y border-white/[0.06] bg-[#0a0a0a] px-5 py-24 sm:px-8"><div className="mx-auto max-w-6xl"><div className="mb-10 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="mb-3 text-[11px] font-medium uppercase tracking-[0.24em] text-emerald-300/80">The business model</p><h2 className="text-3xl font-semibold tracking-[-0.04em] text-white sm:text-5xl">Everything connected.<br /><span className="text-neutral-500">Nothing hidden.</span></h2></div><p className="max-w-sm text-sm leading-6 text-neutral-500">Hover any node to inspect how your subscription business is moving in real time.</p></div><div className="grid min-h-[560px] overflow-hidden rounded-[2rem] border border-white/10 bg-[#0d100e] lg:grid-cols-[.72fr_1.28fr]"><motion.aside initial={{ opacity: 0, x: -18 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true, amount: .25 }} transition={{ duration: .55 }} className="border-b border-white/10 bg-white/[0.025] p-6 sm:p-8 lg:border-b-0 lg:border-r"><div className="flex items-center justify-between"><p className="text-[11px] uppercase tracking-[0.2em] text-neutral-500">Inspector</p><span className="flex items-center gap-1.5 text-[11px] text-emerald-300"><span className="size-1.5 animate-pulse rounded-full bg-emerald-400" /> Live model</span></div><div className="mt-12"><p className="text-sm text-neutral-500">Selected metric</p><div className="mt-2 flex items-center gap-2"><span className="size-2 rounded-full" style={{ backgroundColor: active.color, boxShadow: `0 0 12px ${active.color}` }} /><h3 className="text-2xl font-medium tracking-[-0.04em] text-white">{active.id}</h3></div><p className="mt-2 text-sm text-neutral-400">{active.detail}</p><div className="mt-8 rounded-2xl border border-emerald-400/15 bg-emerald-400/[0.045] p-4"><div className="flex items-end justify-between"><span className="text-3xl font-medium tracking-[-0.05em] text-white">{active.value}</span><span className="text-xs text-emerald-300">+4.1%</span></div><div className="mt-5"><Sparkline /></div></div></div><div className="mt-8 grid grid-cols-3 gap-2 border-t border-white/10 pt-6"><div><p className="text-[10px] uppercase tracking-wider text-neutral-600">Churn</p><p className="mt-2 text-sm text-white">3.8%</p></div><div><p className="text-[10px] uppercase tracking-wider text-neutral-600">Expansion</p><p className="mt-2 text-sm text-emerald-300">+6%</p></div><div><p className="text-[10px] uppercase tracking-wider text-neutral-600">Revenue</p><p className="mt-2 text-sm text-white">+4.1%</p></div></div></motion.aside><div className="relative min-h-[450px] overflow-hidden"><div className="absolute inset-0 opacity-70" style={{ backgroundImage: 'radial-gradient(circle at center, rgba(52,211,153,.12), transparent 32%), radial-gradient(circle at center, transparent 0 28%, rgba(255,255,255,.035) 28.2% 28.4%, transparent 28.7% 46%, rgba(255,255,255,.035) 46.2% 46.4%, transparent 46.7% 64%, rgba(255,255,255,.03) 64.2% 64.4%, transparent 64.7%), linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px)', backgroundSize: '100% 100%, 100% 100%, 38px 38px' }} /><motion.div drag dragMomentum={false} onDrag={(_, info) => setDrag({ x: info.offset.x, y: info.offset.y })} style={{ x: drag.x, y: drag.y }} className="absolute inset-0 cursor-grab active:cursor-grabbing"><svg viewBox="0 0 100 100" className="pointer-events-none absolute inset-0 size-full overflow-visible" aria-hidden="true">{links.map((d, index) => <motion.path key={d} d={d} fill="none" stroke={index === 3 ? active.color : 'rgba(255,255,255,.16)'} strokeWidth=".35" strokeDasharray="1.2 3.5" initial={{ strokeDashoffset: 10 }} animate={{ strokeDashoffset: -10 }} transition={{ duration: 3.2 + index * .3, repeat: Infinity, ease: 'linear' }} />)}</svg><motion.div initial={{ scale: .5, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }} viewport={{ once: true }} transition={{ type: 'spring', delay: .15 }} className="absolute left-1/2 top-1/2 grid size-24 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-emerald-300/50 bg-[#101713] shadow-[0_0_0_12px_rgba(52,211,153,.04),0_0_70px_rgba(52,211,153,.32)]"><div className="grid size-12 place-items-center rounded-2xl border border-emerald-300/30 bg-emerald-300/10"><Network className="size-6 text-emerald-300" /></div><span className="absolute -bottom-7 whitespace-nowrap text-[10px] uppercase tracking-[.2em] text-neutral-500">Business core</span></motion.div>{networkNodes.map((node, index) => <motion.button key={node.id} initial={{ scale: 0, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }} viewport={{ once: true, amount: .2 }} transition={{ type: 'spring', delay: .25 + index * .08 }} onMouseEnter={() => setSelected(node.id)} onFocus={() => setSelected(node.id)} onClick={() => setSelected(node.id)} style={{ left: `${node.x}%`, top: `${node.y}%`, borderColor: selected === node.id ? node.color : 'rgba(255,255,255,.14)' }} className="group absolute -translate-x-1/2 -translate-y-1/2 rounded-2xl border bg-[#111512]/95 px-3 py-2.5 text-left shadow-xl transition-shadow hover:shadow-[0_0_24px_rgba(52,211,153,.18)]"><span className="flex items-center gap-2 text-xs font-medium text-white"><span className="size-1.5 rounded-full" style={{ background: node.color, boxShadow: `0 0 9px ${node.color}` }} />{node.id}</span><span className="mt-1 block text-[10px] text-neutral-500">{node.value}</span></motion.button>)}</motion.div><div className="absolute bottom-5 left-6 text-[10px] uppercase tracking-[.18em] text-neutral-600">Drag to explore · hover to inspect</div></div></div></div></section>
+function FlowBadge({
+  name,
+  value,
+  left,
+  top,
+  icon: Icon,
+  progress,
+}: (typeof integrations)[number] & { progress: MotionValue<number> }) {
+  const badgeLeft = useTransform(progress, [0, 0.72], [left, '50%'])
+  const badgeTop = useTransform(progress, [0, 0.72], [top, '50%'])
+  const opacity = useTransform(progress, [0, 0.34, 0.69, 0.78], [1, 1, 0, 0])
+  const scale = useTransform(progress, [0, 0.68, 0.78], [1, 0.92, 0.7])
+
+  return (
+    <motion.div
+      style={{ left: badgeLeft, top: badgeTop, opacity, scale }}
+      className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-center gap-3 whitespace-nowrap rounded-2xl border border-white/[0.1] bg-[#111411]/90 px-4 py-3 shadow-[0_16px_50px_rgba(0,0,0,0.28)] backdrop-blur-xl"
+    >
+      <span className="grid size-8 place-items-center rounded-xl bg-white/[0.045] text-emerald-300"><Icon className="size-4" /></span>
+      <span className="text-left">
+        <span className="block text-[11px] text-neutral-500">{name}</span>
+        <span className="mt-0.5 block text-sm font-medium tracking-tight text-neutral-100">{value}</span>
+      </span>
+      <span className="ml-1 size-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+    </motion.div>
+  )
+}
+
+function DataGlowSection() {
+  const sectionRef = useRef<HTMLElement>(null)
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ['start start', 'end end'],
+  })
+  const coreOpacity = useTransform(scrollYProgress, [0.58, 0.78], [0, 1])
+  const coreScale = useTransform(scrollYProgress, [0.58, 0.8], [0.55, 1])
+  const labelOpacity = useTransform(scrollYProgress, [0.72, 0.88], [0, 1])
+
+  return (
+    <section ref={sectionRef} id="compare" className="relative min-h-[175vh] border-t border-white/[0.06] bg-[#090a09] px-5 sm:px-8">
+      <div className="sticky top-0 flex min-h-screen items-center overflow-hidden py-20">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_57%,rgba(16,185,129,0.07),transparent_48%)]" />
+        <div className="relative mx-auto w-full max-w-[1100px]">
+          <motion.div
+            initial={{ opacity: 0, y: 42 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.35 }}
+            transition={{ duration: 0.7 }}
+            className="relative z-20 text-center"
+          >
+            <p className="mb-5 text-[10px] font-medium uppercase tracking-[0.24em] text-emerald-300/80">One source of truth</p>
+            <h2 className="mx-auto max-w-[820px] text-balance text-[35px] font-medium leading-[1.08] tracking-[-0.055em] text-white sm:text-[54px]">
+              Your data is everywhere. Your dashboards show the past. Twin shows what&apos;s next.
+            </h2>
+          </motion.div>
+          <div className="relative mx-auto mt-8 h-[430px] max-w-[960px] sm:mt-0 sm:h-[500px]">
+            <div className="absolute left-1/2 top-1/2 size-[280px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-300/[0.07] sm:size-[390px]" />
+            <div className="absolute left-1/2 top-1/2 size-[200px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/[0.045] sm:size-[300px]" />
+            {integrations.map((integration) => (
+              <FlowBadge key={integration.name} {...integration} progress={scrollYProgress} />
+            ))}
+            <motion.div
+              style={{ opacity: coreOpacity, scale: coreScale }}
+              className="absolute left-1/2 top-1/2 z-20 grid size-[76px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-[23px] border border-emerald-300/25 bg-[#111713] shadow-[0_0_0_12px_rgba(16,185,129,0.035),0_0_70px_rgba(16,185,129,0.2)]"
+            >
+              <ToggleRight className="size-9 text-emerald-300" />
+            </motion.div>
+            <motion.p style={{ opacity: labelOpacity }} className="absolute left-1/2 top-[calc(50%+61px)] z-20 -translate-x-1/2 whitespace-nowrap text-[11px] font-medium text-neutral-300">
+              One connected model
+            </motion.p>
+            <div className="absolute inset-x-0 bottom-1 flex justify-center">
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-black/20 px-3 py-1.5 text-[9px] uppercase tracking-[0.17em] text-neutral-600">
+                <MousePointer2 className="size-3" /> Scroll to connect the dots
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function Sparkline({ selected }: { selected: NodeId }) {
+  const isPricing = selected === 'Pricing'
+  return (
+    <svg viewBox="0 0 280 74" className="h-[74px] w-full" role="img" aria-label={`${selected} trend chart`}>
+      <defs>
+        <linearGradient id="inspector-fill" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" stopColor="#34d399" stopOpacity=".25" />
+          <stop offset="1" stopColor="#34d399" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path
+        d={isPricing
+          ? 'M0 57 C25 55 31 44 52 47 S77 51 98 37 S133 42 150 29 S177 35 196 21 S233 24 250 11 S268 12 280 5 V74 H0Z'
+          : 'M0 58 C22 58 31 48 48 51 S77 40 95 43 S119 28 140 34 S166 26 187 30 S213 13 231 17 S261 12 280 5 V74 H0Z'}
+        fill="url(#inspector-fill)"
+      />
+      <motion.path
+        d={isPricing
+          ? 'M0 57 C25 55 31 44 52 47 S77 51 98 37 S133 42 150 29 S177 35 196 21 S233 24 250 11 S268 12 280 5'
+          : 'M0 58 C22 58 31 48 48 51 S77 40 95 43 S119 28 140 34 S166 26 187 30 S213 13 231 17 S261 12 280 5'}
+        fill="none"
+        stroke="#34d399"
+        strokeWidth="2"
+        strokeLinecap="round"
+        initial={{ pathLength: 0.75 }}
+        animate={{ pathLength: 1 }}
+        transition={{ duration: 0.8 }}
+      />
+      <path d="M0 70 H280" stroke="rgba(255,255,255,.07)" strokeWidth="1" />
+    </svg>
+  )
+}
+
+function NetworkNodeCard({
+  node,
+  position,
+  index,
+  isActive,
+  graphRef,
+  onSelect,
+  onPositionChange,
+}: {
+  node: (typeof nodeData)[number]
+  position: { x: number; y: number }
+  index: number
+  isActive: boolean
+  graphRef: { current: HTMLDivElement | null }
+  onSelect: (node: NodeId) => void
+  onPositionChange: (node: NodeId, deltaX: number, deltaY: number) => void
+}) {
+  const x = useMotionValue(0)
+  const y = useMotionValue(0)
+
+  return (
+    <motion.button
+      type="button"
+      drag
+      dragConstraints={graphRef}
+      dragMomentum={false}
+      dragElastic={0.06}
+      onDragEnd={(_, info) => {
+        const bounds = graphRef.current?.getBoundingClientRect()
+        if (bounds) onPositionChange(node.id, info.offset.x / bounds.width * 100, info.offset.y / bounds.height * 100)
+        x.set(0)
+        y.set(0)
+      }}
+      initial={{ opacity: 0, scale: 0.82 }}
+      whileInView={{ opacity: 1, scale: 1 }}
+      viewport={{ once: true, amount: 0.2 }}
+      transition={{ delay: 0.12 + index * 0.07, type: 'spring', stiffness: 180, damping: 20 }}
+      onMouseEnter={() => onSelect(node.id)}
+      onFocus={() => onSelect(node.id)}
+      onClick={() => onSelect(node.id)}
+      style={{ left: `${position.x}%`, top: `${position.y}%`, x, y }}
+      className={`absolute z-20 min-w-[112px] -translate-x-1/2 -translate-y-1/2 rounded-[14px] border px-3 py-2.5 text-left shadow-[0_12px_30px_rgba(0,0,0,0.35)] transition-colors sm:min-w-[140px] sm:rounded-[16px] sm:px-3.5 sm:py-3 ${
+        isActive
+          ? 'border-emerald-300/55 bg-[#122019] shadow-[0_0_28px_rgba(16,185,129,0.16)]'
+          : 'border-white/[0.11] bg-[#101311]/95 hover:border-emerald-300/35'
+      } cursor-grab active:cursor-grabbing`}
+    >
+      <span className="flex items-center gap-2">
+        <span className={`size-1.5 rounded-full ${isActive ? 'bg-emerald-300 shadow-[0_0_9px_rgba(52,211,153,.9)]' : 'bg-neutral-500'}`} />
+        <span className="text-[10px] font-medium text-neutral-100 sm:text-[11px]">{node.id}</span>
+      </span>
+      <span className="mt-1.5 block whitespace-nowrap text-[11px] tracking-tight text-neutral-400 sm:text-xs">
+        {node.value} <span className="text-neutral-600">{node.descriptor}</span>
+      </span>
+      {isActive && <span className="mt-2 block text-[9px] text-emerald-300 sm:hidden">{node.trace}</span>}
+    </motion.button>
+  )
+}
+
+function NetworkModel({
+  selected,
+  setSelected,
+}: {
+  selected: NodeId
+  setSelected: (node: NodeId) => void
+}) {
+  const [positions, setPositions] = useState(initialPositions)
+  const graphRef = useRef<HTMLDivElement>(null)
+  const active = nodeData.find((node) => node.id === selected) ?? nodeData[5]
+  const isPricing = selected === 'Pricing'
+  const effects = inspectorEffects[selected]
+
+  return (
+    <section id="intelligence" className="border-t border-white/[0.06] bg-[#070807] px-5 py-24 sm:px-8 sm:py-32">
+      <div className="mx-auto max-w-[1120px]">
+        <motion.div
+          initial={{ opacity: 0, y: 42 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.25 }}
+          transition={{ duration: 0.7 }}
+          className="mb-11 flex flex-col gap-5 sm:mb-14 sm:flex-row sm:items-end sm:justify-between"
+        >
+          <div>
+            <p className="mb-4 text-[10px] font-medium uppercase tracking-[0.24em] text-emerald-300/80">THE TWIN</p>
+            <h2 className="text-balance text-[36px] font-medium leading-[1.06] tracking-[-0.055em] text-white sm:text-[54px]">
+              Your entire business. One connected model.
+            </h2>
+          </div>
+          <p className="max-w-[300px] pb-1 text-[13px] leading-6 text-neutral-500 sm:text-right">
+            Revenue, customers, costs and cash in one living model.
+          </p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 50 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.18 }}
+          transition={{ duration: 0.7, delay: 0.08 }}
+          className="grid min-h-[620px] overflow-hidden rounded-[26px] border border-white/[0.09] bg-[#0c0f0d] lg:grid-cols-[0.73fr_1.27fr]"
+        >
+          <aside id="memory" className="scroll-mt-24 border-b border-white/[0.08] bg-white/[0.018] p-6 sm:p-8 lg:border-b-0 lg:border-r">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-500">Live inspector</p>
+              <span className="inline-flex items-center gap-2 text-[10px] text-emerald-300">
+                <span className="relative flex size-2">
+                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-50" />
+                  <span className="relative inline-flex size-2 rounded-full bg-emerald-400" />
+                </span>
+                LIVE
+              </span>
+            </div>
+            <div className="mt-9">
+              <p className="text-xs text-neutral-500">Selected node</p>
+              <div className="mt-2 flex items-center gap-2.5">
+                <span className="size-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,.8)]" />
+                <motion.h3 key={selected} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="text-[25px] font-medium tracking-[-0.045em] text-white">
+                  {selected}
+                </motion.h3>
+              </div>
+              <p className="mt-1 text-xs text-neutral-400">{active.descriptor}</p>
+              <motion.div
+                key={`value-${selected}`}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-6 rounded-[18px] border border-emerald-300/[0.14] bg-emerald-300/[0.035] p-4"
+              >
+                <div className="flex items-end justify-between gap-3">
+                  <span className="text-[34px] font-medium leading-none tracking-[-0.06em] text-white">{active.value}</span>
+                  <span className="text-[11px] font-medium text-emerald-300">
+                    {selected === 'Cash' ? '14 mo runway' : active.delta}
+                  </span>
+                </div>
+                <div className="mt-5"><Sparkline selected={selected} /></div>
+                <p className="mt-1 text-[10px] text-neutral-500">
+                  {isPricing ? 'ARPA / mo' : selected === 'Cash' ? '14 mo runway' : active.descriptor}
+                </p>
+              </motion.div>
+            </div>
+            <div className="mt-7 border-t border-white/[0.08] pt-5">
+              <p className="mb-3 text-[9px] font-medium uppercase tracking-[0.19em] text-neutral-500">RIPPLE EFFECTS</p>
+              <div className="flex flex-wrap gap-2">
+                {effects.map((effect, index) => (
+                  <motion.span
+                    key={`${selected}-${effect}`}
+                    initial={{ opacity: 0, scale: 0.92 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: index * 0.06 }}
+                    className="rounded-full border border-white/[0.08] bg-white/[0.025] px-2.5 py-1.5 text-[10px] text-neutral-300"
+                  >
+                    {effect}
+                  </motion.span>
+                ))}
+              </div>
+            </div>
+            <div className="mt-7 grid grid-cols-3 gap-3 border-t border-white/[0.08] pt-5">
+              <div><p className="text-[9px] uppercase tracking-wider text-neutral-600">Conversion</p><p className="mt-2 text-xs text-neutral-200">{isPricing ? '−7%' : '+3.4%'}</p></div>
+              <div><p className="text-[9px] uppercase tracking-wider text-neutral-600">Revenue</p><p className="mt-2 text-xs text-emerald-300">+8.2%</p></div>
+              <div><p className="text-[9px] uppercase tracking-wider text-neutral-600">Cash</p><p className="mt-2 text-xs text-neutral-200">+$420k</p></div>
+            </div>
+          </aside>
+
+          <div
+            ref={graphRef}
+            className="relative min-h-[510px] overflow-hidden bg-[radial-gradient(ellipse_at_50%_48%,rgba(16,185,129,0.075),transparent_38%),linear-gradient(rgba(255,255,255,0.022)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.022)_1px,transparent_1px)] bg-[size:auto,36px_36px,36px_36px] sm:min-h-[600px]"
+          >
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_50%,transparent_20%,rgba(7,8,7,0.4)_100%)]" />
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 size-full overflow-visible" aria-hidden="true">
+              <defs>
+                <filter id="network-glow" x="-100%" y="-100%" width="300%" height="300%">
+                  <feGaussianBlur stdDeviation="1.2" result="blur" />
+                  <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                </filter>
+              </defs>
+              {nodeData.map((node, index) => {
+                const position = positions[node.id]
+                const midpointX = (50 + position.x) / 2
+                const midpointY = (48 + position.y) / 2 - (index % 2 === 0 ? 8 : -8)
+                const isActive = selected === node.id
+                return (
+                  <g key={node.id}>
+                    <motion.path
+                      d={`M 50 48 Q ${midpointX} ${midpointY} ${position.x} ${position.y}`}
+                      fill="none"
+                      stroke={isActive ? 'rgba(52,211,153,.62)' : 'rgba(255,255,255,.14)'}
+                      strokeWidth={isActive ? '0.42' : '0.24'}
+                      strokeDasharray={isActive ? '1.2 1.3' : '0.8 1.8'}
+                      animate={{ strokeDashoffset: isActive ? [0, -16] : [0, -8] }}
+                      transition={{ duration: isActive ? 1.2 : 3.2, repeat: Infinity, ease: 'linear' }}
+                      filter={isActive ? 'url(#network-glow)' : undefined}
+                    />
+                    {isActive && (
+                      <motion.circle
+                        r="0.85"
+                        fill="#6ee7b7"
+                        filter="url(#network-glow)"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: [0, 1, 1, 0], cx: [50, midpointX, position.x], cy: [48, midpointY, position.y] }}
+                        transition={{ duration: 1.8, repeat: Infinity, repeatDelay: 0.25, ease: 'easeInOut' }}
+                      />
+                    )}
+                  </g>
+                )
+              })}
+            </svg>
+            <motion.div
+              initial={{ scale: 0.75, opacity: 0 }}
+              whileInView={{ scale: 1, opacity: 1 }}
+              viewport={{ once: true }}
+              transition={{ type: 'spring', stiffness: 180, damping: 20 }}
+              className="absolute left-1/2 top-[48%] z-10 grid size-[74px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-[23px] border border-emerald-300/25 bg-[#111713] shadow-[0_0_0_10px_rgba(16,185,129,0.035),0_0_55px_rgba(16,185,129,0.17)] sm:size-[86px]"
+            >
+              <ToggleRight className="size-8 text-emerald-300 sm:size-9" />
+              <span className="absolute -bottom-7 whitespace-nowrap text-[9px] uppercase tracking-[0.19em] text-neutral-600">One connected model</span>
+            </motion.div>
+            {nodeData.map((node, index) => {
+              const position = positions[node.id]
+              const isActive = selected === node.id
+              const labelX = (50 + position.x) / 2
+              const labelY = (48 + position.y) / 2 - (index % 2 === 0 ? 9 : -9)
+
+              return (
+                <span
+                  key={`trace-${node.id}`}
+                  className="pointer-events-none absolute z-[5] hidden -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-emerald-300/15 bg-[#0b110e]/90 px-2 py-1 text-[8px] text-emerald-200/80 sm:block"
+                  style={{ left: `${labelX}%`, top: `${labelY}%`, opacity: isActive ? 1 : 0 }}
+                >
+                  {node.trace}
+                </span>
+              )
+            })}
+            {nodeData.map((node, index) => {
+              const position = positions[node.id]
+              const isActive = selected === node.id
+              return (
+                <NetworkNodeCard
+                  key={node.id}
+                  node={node}
+                  position={position}
+                  index={index}
+                  isActive={isActive}
+                  graphRef={graphRef}
+                  onSelect={setSelected}
+                  onPositionChange={(id, deltaX, deltaY) => {
+                    setPositions((current) => ({
+                      ...current,
+                      [id]: {
+                        x: Math.max(12, Math.min(88, current[id].x + deltaX)),
+                        y: Math.max(14, Math.min(90, current[id].y + deltaY)),
+                      },
+                    }))
+                  }}
+                />
+              )
+            })}
+            <p className="absolute bottom-5 left-5 inline-flex items-center gap-2 text-[9px] uppercase tracking-[0.16em] text-neutral-600 sm:left-7">
+              <MousePointer2 className="size-3" /> Drag any node · hover to trace
+            </p>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  )
 }
 
 export default function Page() {
-  const [price, setPrice] = useState(8)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const revenue = useMemo(() => (8.2 + price * 0.3).toFixed(1), [price])
-  const cash = useMemo(() => (42.8 + price * 1.2).toFixed(1), [price])
+  const [selectedNode, setSelectedNode] = useState<NodeId>('Cash')
+  const [simulationRun, setSimulationRun] = useState(0)
+  const [scenario, setScenario] = useState<Scenario>('price')
 
-  return <main id="top" className="min-h-screen overflow-hidden bg-[#080a09] text-white"><div className="pointer-events-none fixed inset-0 -z-0 overflow-hidden" aria-hidden="true"><div className="absolute left-1/2 top-[-28rem] h-[48rem] w-[55rem] -translate-x-1/2 rounded-full bg-emerald-950/35 blur-[140px]" /><div className="absolute right-[-15rem] top-[35rem] h-[34rem] w-[34rem] rounded-full bg-green-950/25 blur-[120px]" /></div>
-    <header className="relative z-20 border-b border-white/[0.06] bg-[#080a09]/75 backdrop-blur-xl"><div className="mx-auto flex h-20 max-w-6xl items-center justify-between px-5 sm:px-8"><Logo /><nav className={`${menuOpen ? 'flex' : 'hidden'} absolute left-5 right-5 top-[72px] flex-col gap-4 rounded-2xl border border-white/10 bg-[#101311] p-5 text-sm text-neutral-400 shadow-2xl md:static md:flex md:flex-row md:items-center md:border-0 md:bg-transparent md:p-0 md:shadow-none`}><a href="#product" className="hover:text-white">Product</a><a href="#simulation" className="hover:text-white">How it works</a><a href="#lifecycle" className="hover:text-white">Lifecycle</a><a href="#pricing" className="hover:text-white">Plans</a></nav><div className="flex items-center gap-3"><button className="hidden text-sm text-neutral-400 hover:text-white sm:block">Log in</button><a href="#demo" className="hidden rounded-lg bg-emerald-400 px-4 py-2.5 text-sm font-medium text-[#06110a] sm:block">Book a demo</a><button aria-label="Toggle menu" onClick={() => setMenuOpen(!menuOpen)} className="rounded-lg border border-white/10 p-2 text-neutral-300 md:hidden">{menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}</button></div></div></header>
-    <section className="relative z-10 px-5 pb-28 pt-24 sm:px-8 sm:pt-32"><div className="mx-auto max-w-5xl text-center"><div className="mx-auto mb-7 flex w-fit items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/[0.07] px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-emerald-300"><Sparkles className="size-3.5" /> Recurring revenue, under control</div><TypewriterHeading /><p className="mx-auto mt-8 max-w-xl text-pretty text-base leading-7 text-neutral-400 sm:text-lg">Centralize plans, automate billing, reconcile payments, and see every subscription state in one clear system.</p><div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row"><a href="#demo" className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-400 px-5 py-3 text-sm font-medium text-[#06110a] shadow-[0_0_30px_rgba(16,185,129,0.22)]">See Brightloop in action <ArrowRight className="size-4" /></a><a href="#simulation" className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-5 py-3 text-sm font-medium text-neutral-300"><Play className="size-3.5 fill-current" /> Explore the model</a></div></div><div className="relative mx-auto mt-20 max-w-4xl"><div className="absolute inset-x-16 top-1/2 h-px bg-gradient-to-r from-transparent via-emerald-400/60 to-transparent" /><div className="relative grid grid-cols-2 gap-3 sm:grid-cols-4"><div className="mt-8 rounded-xl border border-white/10 bg-[#111512]/90 p-3 backdrop-blur"><div className="flex items-center gap-2 text-xs text-neutral-400"><span className="grid size-7 place-items-center rounded-md bg-sky-400/10 text-sky-300">P</span> PostgreSQL</div><div className="mt-4 text-lg text-white">2,480 <span className="text-[10px] text-emerald-400">active records</span></div></div><div className="rounded-xl border border-white/10 bg-[#111512]/90 p-3 backdrop-blur"><div className="flex items-center gap-2 text-xs text-neutral-400"><span className="grid size-7 place-items-center rounded-md bg-violet-400/10 text-violet-300">S</span> Stripe</div><div className="mt-4 text-lg text-white">$184.2k <span className="text-[10px] text-emerald-400">MRR</span></div></div><div className="mt-8 rounded-xl border border-white/10 bg-[#111512]/90 p-3 backdrop-blur"><div className="flex items-center gap-2 text-xs text-neutral-400"><span className="grid size-7 place-items-center rounded-md bg-emerald-400/10 text-emerald-300">Q</span> QuickBooks</div><div className="mt-4 text-lg text-white">$162.9k <span className="text-[10px] text-emerald-400">collected</span></div></div><div className="rounded-xl border border-emerald-400/30 bg-emerald-400/[0.08] p-3 shadow-[0_0_30px_rgba(16,185,129,0.12)] backdrop-blur"><div className="flex items-center gap-2 text-xs text-emerald-200"><span className="grid size-7 place-items-center rounded-md bg-emerald-400/15"><Zap className="size-3.5" /></span> Brightloop</div><div className="mt-4 text-lg text-white">Live <span className="ml-1 inline-block size-1.5 rounded-full bg-emerald-400 align-middle shadow-[0_0_8px_#34d399]" /></div></div></div></div></section>
-    <NetworkModel />
-    <section id="product" className="relative z-10 border-y border-white/[0.06] bg-black/20 px-5 py-20 sm:px-8"><div className="mx-auto max-w-6xl"><p className="text-center text-xs uppercase tracking-[0.2em] text-neutral-500">Works with the systems your finance team already trusts</p><div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-5">{integrations.map((item) => <div key={item.name} className="flex items-center justify-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.025] px-4 py-4 text-sm text-neutral-300"><span className={`grid size-7 place-items-center rounded-md font-semibold ${item.tone}`}>{item.mark}</span>{item.name}</div>)}</div></div></section>
-    <section id="simulation" className="relative z-10 px-5 py-28 sm:px-8"><SectionHeading eyebrow="Interactive billing model" title="Change one assumption. See the invoice run move." body="Brightloop turns recurring revenue operations into a living model. Preview a billing day, inspect the outcomes, and make every change with confidence." /><div className="mx-auto mt-16 grid max-w-6xl gap-5 lg:grid-cols-[0.8fr_1.2fr]"><div className="rounded-3xl border border-white/10 bg-[#101311]/90 p-6 sm:p-8"><div className="flex items-center gap-2 text-sm font-medium text-white"><CircleDollarSign className="size-4 text-emerald-400" /> Billing day simulator</div><p className="mt-2 text-sm leading-6 text-neutral-500">Adjust a rule to preview the next automated billing run.</p><div className="mt-12"><div className="flex justify-between text-sm"><span className="text-neutral-400">Annual plan mix</span><span className="font-medium text-emerald-300">+{price}%</span></div><input aria-label="Annual plan mix" type="range" min="0" max="20" value={price} onChange={(e) => setPrice(Number(e.target.value))} className="mt-5 h-1.5 w-full cursor-pointer accent-emerald-400" /><div className="mt-2 flex justify-between text-[11px] text-neutral-600"><span>0%</span><span>10%</span><span>20%</span></div></div><div className="mt-12 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.05] p-4"><div className="flex items-center gap-2 text-xs text-emerald-300"><BrainCircuit className="size-4" /> Engine read</div><p className="mt-3 text-sm leading-6 text-neutral-300">A <span className="font-medium text-white">+{price}%</span> annual mix improves cash predictability without changing your tax or discount rules.</p></div></div><div className="rounded-3xl border border-white/10 bg-[#101311]/90 p-6 sm:p-8"><div className="flex items-center justify-between"><div><p className="text-sm font-medium text-white">Billing impact</p><p className="mt-1 text-xs text-neutral-500">Dry run · Updated just now</p></div><div className="flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-300"><span className="size-1.5 rounded-full bg-emerald-400" /> Simulating</div></div><div className="mt-7 grid gap-3 sm:grid-cols-3"><MetricCard label="Revenue" value={`+${revenue}%`} delta="vs. baseline" icon={TrendingUp} /><MetricCard label="Collected" value={`$${cash}k`} delta="+$6.4k" icon={LineChart} /><MetricCard label="Invoices" value="248" delta="ready to draft" icon={Database} /></div><div className="mt-8 rounded-2xl border border-white/[0.07] bg-black/20 p-4"><div className="flex items-center justify-between text-xs text-neutral-500"><span>Projected collected revenue</span><span>Next 12 months</span></div><svg className="mt-5 h-36 w-full" viewBox="0 0 600 150" role="img" aria-label="Projected collected revenue trend" preserveAspectRatio="none"><defs><linearGradient id="area" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#34d399" stopOpacity=".3" /><stop offset="100%" stopColor="#34d399" stopOpacity="0" /></linearGradient></defs><path d="M0 124 C45 120, 64 104, 104 112 S165 78, 200 91 S254 72, 300 80 S360 45, 395 64 S453 31, 492 43 S550 20, 600 12 V150 H0Z" fill="url(#area)" /><path d="M0 124 C45 120, 64 104, 104 112 S165 78, 200 91 S254 72, 300 80 S360 45, 395 64 S453 31, 492 43 S550 20, 600 12" fill="none" stroke="#34d399" strokeWidth="2.5" /></svg><div className="mt-1 flex justify-between text-[10px] text-neutral-600"><span>Now</span><span>Q2</span><span>Q3</span><span>Q4</span><span>Q1</span></div></div></div></div></section>
-    <section id="lifecycle" className="relative z-10 border-y border-white/[0.06] bg-[#0b0e0c] px-5 py-28 sm:px-8"><SectionHeading eyebrow="Subscription lifecycle" title="Every state. Every guard. Nothing slips." body="From quotation to active subscription, Brightloop makes the rules visible and the next step unambiguous." /><div className="mx-auto mt-16 grid max-w-5xl items-center gap-3 md:grid-cols-5">{['Draft', 'Quotation', 'Confirmed', 'Active', 'Closed'].map((item, index) => <div key={item} className="flex items-center gap-3"><div className="flex-1 rounded-2xl border border-white/10 bg-white/[0.035] p-5 text-center"><div className="mx-auto mb-3 grid size-9 place-items-center rounded-full bg-emerald-400/10 text-emerald-300">{index < 4 ? <Check className="size-4" /> : index + 1}</div><p className="text-sm font-medium text-white">{item}</p><p className="mt-2 text-xs text-neutral-500">{['Prepared', '30 day validity', 'Guarded', '248 live', 'Archived'][index]}</p></div>{index < 4 && <ArrowRight className="hidden size-4 text-emerald-400/60 md:block" />}</div>)}</div></section>
-    <section id="pricing" className="relative z-10 px-5 py-28 sm:px-8"><SectionHeading eyebrow="Plan intelligence" title="Don&apos;t guess. Compare." body="Put plans, variants, discounts, and tax outcomes side by side before you commit." /><div className="mx-auto mt-16 grid max-w-6xl gap-4 lg:grid-cols-3">{scenarios.map((scenario) => <div key={scenario.label} className={`relative rounded-3xl border p-6 ${scenario.tone === 'featured' ? 'border-emerald-400/40 bg-emerald-400/[0.07] shadow-[0_0_40px_rgba(16,185,129,0.1)]' : 'border-white/10 bg-white/[0.025]'}`}>{scenario.tone === 'featured' && <div className="absolute right-5 top-5 rounded-full bg-emerald-400 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#06110a]">Recommended</div>}<p className="text-xs uppercase tracking-[0.16em] text-neutral-500">{scenario.label}</p><h3 className="mt-5 max-w-[12rem] text-xl font-medium leading-7 text-white">{scenario.title}</h3><div className="mt-12 border-t border-white/10 pt-5"><div className="flex justify-between text-sm"><span className="text-neutral-500">Revenue impact</span><span className="text-emerald-300">{scenario.impact}</span></div><div className="mt-4 flex justify-between text-sm"><span className="text-neutral-500">Risk profile</span><span className="text-neutral-300">{scenario.risk}</span></div></div><button className="mt-8 flex w-full items-center justify-between rounded-lg border border-white/10 px-4 py-3 text-sm text-neutral-300 hover:border-emerald-400/40 hover:text-white">View plan outcome <ArrowRight className="size-4" /></button></div>)}</div></section>
-    <section id="demo" className="relative z-10 px-5 pb-28 pt-8 sm:px-8"><div className="mx-auto max-w-4xl rounded-3xl border border-emerald-400/20 bg-emerald-400/[0.07] px-6 py-16 text-center shadow-[0_0_80px_rgba(16,185,129,0.08)] sm:px-10"><p className="text-[11px] uppercase tracking-[0.22em] text-emerald-300">Make recurring revenue feel simple</p><h2 className="mx-auto mt-5 max-w-2xl text-balance text-4xl font-semibold tracking-[-0.05em] text-white sm:text-5xl">Your subscriptions are already telling you what&apos;s next.</h2><p className="mx-auto mt-5 max-w-lg text-sm leading-6 text-neutral-400">Centralize the catalog. Automate the billing. Build what comes after.</p><button className="mt-8 inline-flex items-center gap-2 rounded-lg bg-emerald-400 px-5 py-3 text-sm font-medium text-[#06110a]">Book a demo <ArrowRight className="size-4" /></button></div></section>
-    <footer className="relative z-10 border-t border-white/[0.06] px-5 py-10 sm:px-8"><div className="mx-auto flex max-w-6xl flex-col gap-10 sm:flex-row sm:items-start sm:justify-between"><div><Logo /><p className="mt-4 max-w-xs text-xs leading-5 text-neutral-600">Subscription management for businesses building what&apos;s next.</p></div><div className="grid grid-cols-2 gap-x-16 gap-y-8 text-xs sm:grid-cols-4"><div><p className="mb-3 text-neutral-400">Product</p><a href="#simulation" className="block text-neutral-600 hover:text-neutral-300">Billing simulator</a><a href="#lifecycle" className="mt-2 block text-neutral-600 hover:text-neutral-300">Lifecycle</a></div><div><p className="mb-3 text-neutral-400">Company</p><a href="#demo" className="block text-neutral-600 hover:text-neutral-300">About</a><a href="#demo" className="mt-2 block text-neutral-600 hover:text-neutral-300">Contact</a></div><div><p className="mb-3 text-neutral-400">Resources</p><a href="#simulation" className="block text-neutral-600 hover:text-neutral-300">Insights</a><a href="#demo" className="mt-2 block text-neutral-600 hover:text-neutral-300">Guides</a></div><div><p className="mb-3 text-neutral-400">Legal</p><a href="#top" className="block text-neutral-600 hover:text-neutral-300">Privacy</a><a href="#top" className="mt-2 block text-neutral-600 hover:text-neutral-300">Terms</a></div></div></div><div className="mx-auto mt-12 max-w-6xl border-t border-white/[0.06] pt-5 text-[11px] text-neutral-700">© 2026 Brightloop Software. All rights reserved.</div></footer>
-  </main>
+  function simulate(nextScenario: Scenario) {
+    setScenario(nextScenario)
+    setSelectedNode('Pricing')
+    setSimulationRun((run) => run + 1)
+  }
+
+  return (
+    <main id="top" className="min-h-screen overflow-x-clip bg-[#070807] text-white">
+      <Header />
+      <SimulatorHero onSimulate={simulate} runId={simulationRun} scenario={scenario} />
+      <DataGlowSection />
+      <NetworkModel selected={selectedNode} setSelected={setSelectedNode} />
+      <footer className="border-t border-white/[0.06] bg-[#070807] px-5 py-8 sm:px-8">
+        <div className="mx-auto flex max-w-[1120px] flex-col items-center justify-between gap-4 sm:flex-row">
+          <Logo />
+          <p className="text-[10px] text-neutral-600">See what&apos;s next with Twin.</p>
+          <a href="#top" className="inline-flex items-center gap-1.5 text-[10px] text-neutral-500 transition hover:text-emerald-300">
+            Back to top <ArrowUpRight className="size-3" />
+          </a>
+        </div>
+      </footer>
+    </main>
+  )
 }

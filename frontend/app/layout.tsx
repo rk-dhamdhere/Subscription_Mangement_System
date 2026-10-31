@@ -3,9 +3,9 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Brightloop — Subscription management',
-  description: 'Automated billing, subscriptions, invoices, and revenue operations for Brightloop.',
-  generator: 'v0.app',
+  title: 'Twin — Decision simulator',
+  description: 'Simulate the decision before you make it. See how every choice ripples through your business with Twin.',
+  generator: 'Twin',
   icons: {
     icon: [
       {
@@ -26,11 +26,8 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  colorScheme: 'light dark',
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: 'white' },
-    { media: '(prefers-color-scheme: dark)', color: 'black' },
-  ],
+  colorScheme: 'dark',
+  themeColor: '#070807',
 }
 
 export default function RootLayout({
@@ -42,7 +39,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased">
         {children}
-        {process.env.NODE_ENV === 'production' && <Analytics />}
+        {process.env.NODE_ENV === 'production' && process.env.VERCEL === '1' && <Analytics />}
       </body>
     </html>
   )
